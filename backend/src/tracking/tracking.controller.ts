@@ -2,7 +2,7 @@ import { Controller, Post, Body, HttpCode, HttpStatus, Get } from '@nestjs/commo
 import { TrackingService } from './tracking.service';
 import { CreateLocationLogDto } from './dto/create-location-log.dto';
 
-@Controller('api/v1/tracking')
+@Controller('tracking')
 export class TrackingController {
   constructor(private readonly trackingService: TrackingService) {}
 

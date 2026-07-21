@@ -7,3 +7,7 @@ build/
 .env
 .env.*
 !.env.example
+.gradle/
+local.properties
+/android-app/build/
+/android-app/app/build/
