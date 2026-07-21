@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { UserPlus, Search, Edit, Trash2, Download } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { UserPlus, Search, Edit, Trash2, Download, Navigation } from 'lucide-react';
 import apiClient from '../api/client';
 
 import AddEmployeeModal from '../components/AddEmployeeModal';
@@ -14,6 +15,7 @@ interface Employee {
 }
 
 const Employees: React.FC = () => {
+  const navigate = useNavigate();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -126,6 +128,13 @@ const Employees: React.FC = () => {
                   </td>
                   <td>
                     <div className="action-buttons">
+                      <button
+                        className="icon-btn text-blue-400"
+                        title="View Travel Route"
+                        onClick={() => navigate(`/dashboard/map?userId=${emp.id}`)}
+                      >
+                        <Navigation size={16} />
+                      </button>
                       <button className="icon-btn text-blue-400" title="Edit">
                         <Edit size={16} />
                       </button>

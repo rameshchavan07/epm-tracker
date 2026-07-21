@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateLocationLogDto } from './dto/create-location-log.dto';
+import { TrackingGateway } from './tracking.gateway';
 
 interface LatestLocationRaw {
   id: string;
@@ -17,7 +18,11 @@ interface LatestLocationRaw {
 
 @Injectable()
 export class TrackingService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Inject(forwardRef(() => TrackingGateway))
+    private trackingGateway: TrackingGateway,
+  ) {}
 
   async processBatch(locations: CreateLocationLogDto[]) {
     if (!locations || locations.length === 0) {
@@ -51,6 +56,24 @@ export class TrackingService {
         where: { id: { in: userIds } },
         data: { status: true },
       });
+
+      // Broadcast WebSocket live location update to connected dashboard clients
+      if (locations.length > 0) {
+        const lastLoc = locations[locations.length - 1];
+        const user = await this.prisma.user.findUnique({
+          where: { id: lastLoc.userId },
+        });
+        this.trackingGateway.broadcastLocationUpdate({
+          id: lastLoc.userId,
+          name: user?.name || 'Employee',
+          role: user?.role || 'EMPLOYEE',
+          status: 'Active',
+          lat: lastLoc.latitude,
+          lng: lastLoc.longitude,
+          battery: 90,
+          recordedAt: new Date(lastLoc.timestamp),
+        });
+      }
     } catch (error) {
       console.error('Error inserting batch:', error);
     }

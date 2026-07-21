@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   MapContainer,
   TileLayer,
@@ -18,9 +19,13 @@ import {
   Play,
   Pause,
   RotateCcw,
+  Calendar,
+  Clock,
+  Compass,
 } from 'lucide-react';
 import L from 'leaflet';
 import AddEmployeeModal from '../components/AddEmployeeModal';
+import { calculateRouteMetrics } from '../utils/travelMetrics';
 
 // Fix for default marker icons in react-leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -66,10 +71,14 @@ interface LocationHistoryItem {
 }
 
 const LiveMap: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const targetUserId = searchParams.get('userId');
+
   const [employees, setEmployees] = useState<any[]>([]);
   const [activeEmployee, setActiveEmployee] = useState<any | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [loading, setLoading] = useState(true);
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
   // UI State
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -96,24 +105,57 @@ const LiveMap: React.FC = () => {
         const response = await apiClient.get('/tracking/latest');
         if (response.data && response.data.length > 0) {
           setEmployees(response.data);
-          if (!activeEmployee) {
-            setActiveEmployee(response.data[0]);
+          
+          let selected = response.data[0];
+          if (targetUserId) {
+            const found = response.data.find((e: any) => e.id === targetUserId);
+            if (found) selected = found;
+          }
+          setActiveEmployee(selected);
+          setMapCenter([selected.lat, selected.lng]);
+
+          if (targetUserId) {
+            setShowHistory(true);
+            fetchRouteHistory(selected.id);
           }
         }
-      } catch (err) {
-        console.error('Failed to fetch live locations', err);
+      } catch (error) {
+        console.error('Failed to fetch initial locations', error);
       } finally {
         setLoading(false);
       }
     };
 
     fetchLocations();
-    const mapTimer = setInterval(fetchLocations, 10000); // Poll every 10s
-    const clockTimer = setInterval(() => setCurrentTime(new Date()), 1000);
+
+    // Setup Socket.io Real-Time Live Streaming Listener
+    let socket: any;
+    import('socket.io-client').then(({ io }) => {
+      socket = io('http://localhost:3000');
+      socket.on('connect', () => {
+        console.log('Connected to WebSocket Live Location Gateway');
+      });
+
+      socket.on('locationUpdate', (updatedUser: any) => {
+        setEmployees((prev) => {
+          const index = prev.findIndex((e) => e.id === updatedUser.id);
+          if (index !== -1) {
+            const next = [...prev];
+            next[index] = { ...next[index], ...updatedUser };
+            return next;
+          }
+          return [updatedUser, ...prev];
+        });
+      });
+    });
+
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
 
     return () => {
-      clearInterval(mapTimer);
-      clearInterval(clockTimer);
+      clearInterval(interval);
+      if (socket) socket.disconnect();
     };
   }, [activeEmployee]);
 
@@ -419,6 +461,87 @@ const LiveMap: React.FC = () => {
             </>
           )}
         </MapContainer>
+
+        {/* Travel Telemetry Metrics Banner Overlay */}
+        {showHistory && activeEmployee && (
+          <div
+            className="glass-panel"
+            style={{
+              position: 'absolute',
+              top: '20px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 1000,
+              padding: '12px 24px',
+              borderRadius: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '24px',
+              background: 'rgba(15, 23, 42, 0.85)',
+              border: '1px solid rgba(59, 130, 246, 0.3)',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+              color: '#fff',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Compass className="text-blue-400" size={20} />
+              <div>
+                <div style={{ fontSize: '11px', color: '#94a3b8' }}>Total Distance</div>
+                <div style={{ fontSize: '15px', fontWeight: '700', color: '#60a5fa' }}>
+                  {calculateRouteMetrics(historyLogs).totalDistanceKm} km
+                </div>
+              </div>
+            </div>
+
+            <div style={{ height: '24px', width: '1px', background: 'rgba(255,255,255,0.1)' }}></div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Clock className="text-purple-400" size={20} />
+              <div>
+                <div style={{ fontSize: '11px', color: '#94a3b8' }}>Travel Duration</div>
+                <div style={{ fontSize: '15px', fontWeight: '700', color: '#c084fc' }}>
+                  {calculateRouteMetrics(historyLogs).formattedDuration}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ height: '24px', width: '1px', background: 'rgba(255,255,255,0.1)' }}></div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Navigation className="text-emerald-400" size={20} />
+              <div>
+                <div style={{ fontSize: '11px', color: '#94a3b8' }}>Visited Locations</div>
+                <div style={{ fontSize: '15px', fontWeight: '700', color: '#34d399' }}>
+                  {calculateRouteMetrics(historyLogs).visitedLocationsCount} Stops
+                </div>
+              </div>
+            </div>
+
+            <div style={{ height: '24px', width: '1px', background: 'rgba(255,255,255,0.1)' }}></div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Calendar className="text-amber-400" size={18} />
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => {
+                  setSelectedDate(e.target.value);
+                  if (activeEmployee) fetchRouteHistory(activeEmployee.id);
+                }}
+                style={{
+                  background: 'rgba(0, 0, 0, 0.4)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '8px',
+                  color: '#fff',
+                  padding: '4px 8px',
+                  fontSize: '13px',
+                  outline: 'none',
+                  cursor: 'pointer',
+                }}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Route Playback Scrubber Control Bar */}
         {showHistory && activeEmployee && (
