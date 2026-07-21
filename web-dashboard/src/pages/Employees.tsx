@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { UserPlus, Search, Edit, Trash2, Download } from 'lucide-react';
 import apiClient from '../api/client';
 
+import AddEmployeeModal from '../components/AddEmployeeModal';
+
 interface Employee {
   id: string;
   name: string;
@@ -14,6 +16,7 @@ interface Employee {
 const Employees: React.FC = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   useEffect(() => {
     const fetchEmployees = async () => {
@@ -49,6 +52,12 @@ const Employees: React.FC = () => {
     document.body.removeChild(link);
   };
 
+  const handleAddEmployee = (employeeData: { name: string; lat: number; lng: number }) => {
+    // In a real app, you would POST this to your API
+    console.log("Adding employee:", employeeData);
+    alert(`Successfully added ${employeeData.name}! (API integration pending)`);
+  };
+
   return (
     <div className="page-container animate-fade-in">
       <header className="page-header flex justify-between items-center">
@@ -60,11 +69,18 @@ const Employees: React.FC = () => {
           <button className="btn-secondary" style={{ width: 'auto' }} onClick={handleExportCSV}>
             <Download className="btn-icon inline-block mr-2" /> Export
           </button>
-          <button className="btn-primary" style={{ width: 'auto' }}>
+          <button className="btn-primary" style={{ width: 'auto' }} onClick={() => setShowAddModal(true)}>
             <UserPlus className="btn-icon inline-block mr-2" /> Add Employee
           </button>
         </div>
       </header>
+
+      {showAddModal && (
+        <AddEmployeeModal 
+          onClose={() => setShowAddModal(false)}
+          onAdd={handleAddEmployee}
+        />
+      )}
 
       <div className="table-card glass-panel mt-6">
         <div className="table-toolbar">
