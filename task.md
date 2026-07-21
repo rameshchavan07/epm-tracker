@@ -1,108 +1,62 @@
-# Android App Scaffolding Tasks
+# EPM Tracker Project Task Checklist
 
-- `[x]` Initialize project structure
-  - `[x]` Create root build files (`settings.gradle.kts`, `build.gradle.kts`, `gradle.properties`)
-  - `[x]` Create app module build file (`app/build.gradle.kts`)
-  - `[x]` Create AndroidManifest.xml
-  - `[x]` Create MainActivity.kt
-  - `[x]` Create basic strings and resources
-- `[x]` Verify build
-  - `[x]` Run Gradle build check (Manual verification in Android Studio required as Gradle CLI is not installed)
+## 1. Native Android Mobile App (`android-app`)
 
-# Navigation and Database Setup
-- `[x]` Dependencies
-  - `[x]` Add KSP plugin to root build.gradle.kts
-  - `[x]` Add Room, Navigation, KSP dependencies to app/build.gradle.kts
-- `[x]` UI & Navigation
-  - `[x]` Create LoginScreen
-  - `[x]` Create PermissionScreen
-  - `[x]` Create DashboardScreen
-  - `[x]` Create AppNavigation graph
-  - `[x]` Update MainActivity to use AppNavigation
-- `[x]` Local Storage
-  - `[x]` Create ConfigEntity
-  - `[x]` Create ConfigDao
-  - `[x]` Create LocationEntity
-  - `[x]` Create LocationDao
-  - `[x]` Create AppDatabase
-
-# Background Location Tracking
-- `[x]` Configuration
-  - `[x]` Add play-services-location dependency
-  - `[x]` Add FOREGROUND_SERVICE permissions to Manifest
-  - `[x]` Declare TrackingService in Manifest
-- `[x]` Implementation
-  - `[x]` Create LocationClient interface and implementation
-  - `[x]` Create TrackingService (Foreground Service)
-  - `[x]` Update DashboardScreen to start/stop service
-
-# Auto-Sync to Cloud
-- `[x]` Dependencies
-  - `[x]` Add Retrofit, Gson, and WorkManager to app/build.gradle.kts
-- `[x]` Networking
-  - `[x]` Create TrackingApi
-  - `[x]` Create RetrofitClient
-- `[x]` Background Synchronization
-  - `[x]` Create SyncWorker
-  - `[x]` Update MainActivity to enqueue SyncWorker
-
-# Backend Initialization
-- `[x]` Scaffolding
-  - `[x]` Scaffold NestJS project
-  - `[x]` Install Prisma and @prisma/client
-- `[x]` Database Configuration
-  - `[x]` Set up .env with Neon URL
-  - `[x]` Initialize Prisma schema
-  - `[x]` Define Company, User, LocationLog models
-- `[x]` API Implementation
-  - `[x]` Create TrackingModule and Controller
-  - `[x]` Implement Location sync endpoint
-
-# Authentication & User Management
-- `[x]` Dependencies
-  - `[x]` Install @nestjs/jwt, @nestjs/passport, passport-jwt, bcrypt
-- `[x]` Users Module
-  - `[x]` Create UsersModule, UsersService
-- `[x]` Auth Module
-  - `[x]` Create AuthModule, AuthService, AuthController
-  - `[x]` Create JwtStrategy
-- `[x]` Configuration
-  - `[x]` Add JWT_SECRET to .env
-
-# Web Dashboard
-- `[x]` Scaffolding
-  - `[x]` Scaffold Vite + React + TS project
-  - `[x]` Install routing and map dependencies
-- `[x]` UI Implementation
-  - `[x]` Create premium index.css design system
-  - `[x]` Create Login component
-  - `[x]` Create Live Map Dashboard component
-
-# UI/UX Analytics Overhaul
-- `[x]` Dependencies
-  - `[x]` Install recharts
-- `[x]` Architecture
-  - `[x]` Create Global Layout with Navigation Sidebar
-  - `[x]` Update App.tsx routing
-- `[x]` Pages
-  - `[x]` Create Analytics Overview page (Cards, Charts, Table)
-  - `[x]` Refactor Live Map page
-  - `[x]` Create Employees table page
-- `[x]` Styling
-  - `[x]` Update index.css for new layout and analytics components
-
-# Native Android App Implementation Tasks
-- `[x]` **Data Layer**
-  - `[x]` Create SessionManager for JWT storage (EncryptedSharedPreferences)
-  - `[x]` Setup Retrofit ApiService and ApiClient
-  - `[x]` Setup Room Database (AppDatabase, LocationEntity, LocationDao)
-- `[x]` **Background Processing**
-  - `[x]` Create SyncWorker to upload cached locations
-  - `[x]` Create LocationService (Foreground Service) for continuous tracking
+- `[x]` **Project Initialization & Scaffolding**
+  - `[x]` Create root Gradle build files (`settings.gradle.kts`, `build.gradle.kts`, `gradle.properties`)
+  - `[x]` Create app module build configuration (`app/build.gradle.kts`) with Room, Navigation & KSP dependencies
+  - `[x]` Setup `AndroidManifest.xml` (Permissions, Service registration, WorkManager)
+  - `[x]` Create `MainActivity.kt` with Jetpack Compose navigation graph
+- `[x]` **Data Layer & Session Management**
+  - `[x]` Create `SessionManager` for encrypted JWT and User UUID storage (`EncryptedSharedPreferences`)
+  - `[x]` Setup Retrofit `ApiClient` (`http://10.0.2.2:3000/`) and `ApiService` data classes (`LoginRequest`, `LocationBatchRequest`, `LoginResponse`)
+  - `[x]` Setup Room database (`AppDatabase`, `LocationEntity`, `LocationDao`) for local offline location caching
+- `[x]` **Background Services & Processing**
+  - `[x]` Create `TrackingService` (Android Foreground Service with notification for continuous location tracking)
+  - `[x]` Create `SyncWorker` (WorkManager task for background batch sync of offline Room location logs)
 - `[x]` **User Interface (Jetpack Compose)**
-  - `[x]` Build LoginScreen
-  - `[x]` Build DashboardScreen (Start/Stop Tracking)
-  - `[x]` Wire navigation in MainActivity
-- `[x]` **Configuration & Permissions**
-  - `[x]` Update AndroidManifest.xml (Permissions, Service registration)
-  - `[x]` Build and generate APK
+  - `[x]` Build `LoginScreen` with authentication handling
+  - `[x]` Build `DashboardScreen` with Start/Stop location tracking controls
+  - `[x]` Build `PermissionScreen` for location permissions request
+
+---
+
+## 2. NestJS Backend API & Database (`backend`)
+
+- `[x]` **Project Scaffolding & Configuration**
+  - `[x]` Scaffold NestJS TypeScript application
+  - `[x]` Configure `backend/.env` (`DATABASE_URL` pointing to Neon PostgreSQL, `JWT_SECRET`)
+  - `[x]` Install `@nestjs/jwt`, `@nestjs/passport`, `passport-jwt`, `bcrypt`, `class-validator`, `class-transformer`
+- `[x]` **Database & Prisma ORM**
+  - `[x]` Define Prisma schema (`Company`, `User`, `LocationLog`)
+  - `[x]` Reset and synchronize schema with Neon PostgreSQL (`npx prisma db push --force-reset`)
+  - `[x]` Create seed script (`prisma/seed.ts`) and populate initial company (**Acme Corp**), admin user, employee accounts, and sample locations
+- `[x]` **Complete API Endpoint Suite (14 Active Routes)**
+  - `[x]` **Auth Module (`/api/v1/auth`)**: `POST /login`, `POST /register`, `GET /me`
+  - `[x]` **Users Module (`/api/v1/users`)**: `GET /`, `GET /:id`, `POST /`, `PATCH /:id`, `DELETE /:id`
+  - `[x]` **Tracking Module (`/api/v1/tracking`)**: `POST /location`, `POST /location/batch`, `GET /latest`, `GET /history/:userId`, `GET /analytics`
+  - `[x]` **Company Module (`/api/v1/company`)**: `GET /profile`, `PATCH /profile`
+- `[x]` **Validation & Security**
+  - `[x]` Add request DTO validation (`LoginDto`, `RegisterDto`, `CreateUserDto`, `UpdateUserDto`, `UpdateCompanyDto`, `CreateLocationLogDto`)
+  - `[x]` Enable global NestJS `ValidationPipe`
+  - `[x]` Implement `LatestLocationRaw` interface to eliminate raw query `any` types
+  - `[x]` Resolve unhandled promises in `main.ts` and ensure zero TypeScript compilation errors
+
+---
+
+## 3. Web Dashboard (`web-dashboard`)
+
+- `[x]` **Scaffolding & Design System**
+  - `[x]` Scaffold Vite + React 19 + TypeScript application
+  - `[x]` Create glassmorphism Vanilla CSS design system (`index.css`)
+  - `[x]` Setup global navigation sidebar and router layout (`Layout.tsx`, `App.tsx`)
+- `[x]` **Pages & Components**
+  - `[x]` `Login.tsx`: Admin & Manager authentication page
+  - `[x]` `Overview.tsx`: Analytics overview with metric cards (Active/Offline users, Log count) and Recharts charts
+  - `[x]` `LiveMap.tsx`: OpenStreetMap Leaflet integration showing live team positions
+  - `[x]` `Employees.tsx`: Team employee management table with add/edit modals
+  - `[x]` **Route Playback & Breadcrumb History**: Interactive map path rendering with dashed Polyline, circle stop markers, and timeline scrubber controls
+  - `[x]` **Company Settings Page**: `CompanySettings.tsx` connected to `GET/PATCH /company/profile` API
+- `[x]` **Verification & Build**
+  - `[x]` Verify clean Vite bundle compilation (`npm run build`)
+  - `[x]` Dev server active on `http://localhost:5173/`

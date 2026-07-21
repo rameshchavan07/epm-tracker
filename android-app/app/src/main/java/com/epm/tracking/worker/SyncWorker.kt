@@ -7,9 +7,6 @@ import com.epm.tracking.data.ApiClient
 import com.epm.tracking.data.AppDatabase
 import com.epm.tracking.data.LocationBatchRequest
 import com.epm.tracking.data.SessionManager
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 class SyncWorker(
     appContext: Context,
@@ -32,19 +29,16 @@ class SyncWorker(
                 return Result.success()
             }
 
-            val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
-            
-            // To get actual userId from token, we'd ideally decode the JWT. 
-            // For this scaffold, we'll hardcode the seeded employee ID that we created in backend.
-            val employeeId = "03478d59-b1d5-47eb-ba68-d069baf46da2" // Need to fetch dynamically in real app
+            // Retrieve cached user ID or fallback to default seeded employee ID
+            val userId = sessionManager.getUserId() ?: "03478d59-b1d5-47eb-ba68-d069baf46da2"
             
             val batchRequest = unsyncedLocations.map { loc ->
                 LocationBatchRequest(
-                    userId = employeeId,
+                    userId = userId,
                     latitude = loc.latitude,
                     longitude = loc.longitude,
                     accuracy = loc.accuracy,
-                    timestamp = dateFormat.format(Date(loc.timestamp))
+                    timestamp = loc.timestamp
                 )
             }
 

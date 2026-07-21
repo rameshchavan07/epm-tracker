@@ -1,8 +1,12 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
+import { RegisterDto } from './dto/register.dto';
+import { User } from '@prisma/client';
+
+export type UserWithoutPassword = Omit<User, 'passwordHash'>;
 
 @Injectable()
 export class AuthService {
@@ -12,29 +16,37 @@ export class AuthService {
     private prisma: PrismaService,
   ) {}
 
-  async validateUser(email: string, pass: string): Promise<any> {
+  async validateUser(
+    email: string,
+    pass: string,
+  ): Promise<UserWithoutPassword | null> {
     const user = await this.usersService.findByEmail(email);
-    if (user && await bcrypt.compare(pass, user.passwordHash)) {
+    if (user && (await bcrypt.compare(pass, user.passwordHash))) {
       const { passwordHash, ...result } = user;
+      void passwordHash;
       return result;
     }
     return null;
   }
 
-  async login(user: any) {
-    const payload = { email: user.email, sub: user.id, companyId: user.companyId, role: user.role };
+  login(user: UserWithoutPassword) {
+    const payload = {
+      email: user.email,
+      sub: user.id,
+      companyId: user.companyId,
+      role: user.role,
+    };
     return {
       access_token: this.jwtService.sign(payload),
       user,
     };
   }
 
-  async registerAdmin(data: any) {
-    // Only for bootstrapping - creates a company and an admin user
+  async registerAdmin(data: RegisterDto) {
     let company = await this.prisma.company.findFirst();
     if (!company) {
       company = await this.prisma.company.create({
-        data: { name: 'Demo Company' }
+        data: { name: 'Demo Company' },
       });
     }
 
@@ -46,10 +58,19 @@ export class AuthService {
       name: data.name,
       passwordHash,
       role: 'ADMIN',
-      company: { connect: { id: company.id } }
+      company: { connect: { id: company.id } },
     });
 
-    const { passwordHash: _, ...result } = user;
+    const { passwordHash: unusedHash, ...result } = user;
+    void unusedHash;
+    return result;
+  }
+
+  async getProfile(userId: string) {
+    const user = await this.usersService.findById(userId);
+    if (!user) return null;
+    const { passwordHash, ...result } = user;
+    void passwordHash;
     return result;
   }
 }

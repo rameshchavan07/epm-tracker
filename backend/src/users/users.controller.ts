@@ -1,14 +1,90 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+} from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import * as bcrypt from 'bcrypt';
+import { PrismaService } from '../prisma/prisma.service';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { Prisma } from '@prisma/client';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Get()
   async findAll() {
     return this.usersService.findAll();
+  }
+
+  @Get(':id')
+  async findOne(@Param('id') id: string) {
+    const user = await this.usersService.findById(id);
+    if (!user) return null;
+    const { passwordHash, ...result } = user;
+    void passwordHash;
+    return result;
+  }
+
+  @Post()
+  async create(@Body() body: CreateUserDto) {
+    let company = await this.prisma.company.findFirst();
+    if (!company) {
+      company = await this.prisma.company.create({
+        data: { name: 'Default Company' },
+      });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const rawPassword = body.password ?? 'password123';
+    const passwordHash = await bcrypt.hash(rawPassword, salt);
+
+    const user = await this.usersService.createUser({
+      email: body.email,
+      name: body.name,
+      passwordHash,
+      role: body.role ?? 'EMPLOYEE',
+      company: { connect: { id: company.id } },
+    });
+
+    const { passwordHash: unusedHash, ...result } = user;
+    void unusedHash;
+    return result;
+  }
+
+  @Patch(':id')
+  async update(@Param('id') id: string, @Body() body: UpdateUserDto) {
+    const updateData: Prisma.UserUpdateInput = {};
+    if (body.email) updateData.email = body.email;
+    if (body.name) updateData.name = body.name;
+    if (body.role) updateData.role = body.role;
+    if (body.status !== undefined) updateData.status = body.status;
+
+    if (body.password) {
+      const salt = await bcrypt.genSalt(10);
+      updateData.passwordHash = await bcrypt.hash(body.password, salt);
+    }
+
+    const user = await this.usersService.updateUser(id, updateData);
+    const { passwordHash: unusedHash, ...result } = user;
+    void unusedHash;
+    return result;
+  }
+
+  @Delete(':id')
+  async remove(@Param('id') id: string) {
+    return this.usersService.deleteUser(id);
   }
 }

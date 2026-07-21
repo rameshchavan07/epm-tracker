@@ -33,12 +33,25 @@ export class UsersService {
         role: true,
         status: true,
         createdAt: true,
-      } as Prisma.UserSelect
+      },
     });
 
-    return users.map(user => ({
+    return users.map((user) => ({
       ...user,
       status: user.status ? 'Active' : 'Offline',
     }));
+  }
+
+  async updateUser(id: string, data: Prisma.UserUpdateInput): Promise<User> {
+    return this.prisma.user.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async deleteUser(id: string): Promise<User> {
+    return this.prisma.user.delete({
+      where: { id },
+    });
   }
 }

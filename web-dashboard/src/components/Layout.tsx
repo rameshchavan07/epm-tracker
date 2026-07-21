@@ -56,7 +56,12 @@ const Layout: React.FC = () => {
         </nav>
 
         <div className="sidebar-bottom">
-          <button className="nav-link"><Settings className="nav-icon" /> Settings</button>
+          <button
+            className={`nav-link ${location.pathname === '/dashboard/settings' ? 'active' : ''}`}
+            onClick={() => navigate('/dashboard/settings')}
+          >
+            <Settings className="nav-icon" /> Settings
+          </button>
           <button className="nav-link text-danger" onClick={() => navigate('/')}>
             <LogOut className="nav-icon" /> Logout
           </button>

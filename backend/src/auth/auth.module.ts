@@ -11,7 +11,8 @@ import { AuthController } from './auth.controller';
     UsersModule,
     PassportModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'fallback-secret-key-do-not-use-in-prod',
+      secret:
+        process.env.JWT_SECRET || 'fallback-secret-key-do-not-use-in-prod',
       signOptions: { expiresIn: '60m' },
     }),
   ],
