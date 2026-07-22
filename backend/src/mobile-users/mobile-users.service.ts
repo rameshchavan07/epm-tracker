@@ -31,7 +31,7 @@ export class MobileUsersService {
     const { deviceId, userId, latitude, longitude } = dto;
     const now = new Date();
 
-    let existing = await this.prisma.mobileUser.findUnique({
+    const existing = await this.prisma.mobileUser.findUnique({
       where: { deviceId },
     });
 

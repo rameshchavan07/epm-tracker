@@ -14,6 +14,7 @@
 - `[x]` **Background Services & Processing**
   - `[x]` Create `TrackingService` (Android Foreground Service with notification for continuous location tracking)
   - `[x]` Create `SyncWorker` (WorkManager task for background batch sync of offline Room location logs)
+  - `[x]` Dynamic tracking interval fetch (`GET /api/v1/tracking/config`) to adapt location fix frequency dynamically
 - `[x]` **User Interface Modernization (Jetpack Compose)**
   - `[x]` Build `LoginScreen` with dark space gradient background, brand badge, and rounded Material 3 fields
   - `[x]` Build `DashboardScreen` with live active tracking status badge, 2x2 telemetry metric grid, and Start/Stop toggle button
@@ -25,16 +26,17 @@
 
 - `[x]` **Project Scaffolding & Configuration**
   - `[x]` Scaffold NestJS TypeScript application
-  - `[x]` Configure `backend/.env` (`DATABASE_URL` pointing to Neon PostgreSQL, `JWT_SECRET`)
+  - `[x]` Configure `backend/.env` (`DATABASE_URL` pointing to **Neon Cloud PostgreSQL**, `JWT_SECRET`)
   - `[x]` Install `@nestjs/jwt`, `@nestjs/passport`, `passport-jwt`, `bcrypt`, `class-validator`, `@nestjs/websockets`, `socket.io`
 - `[x]` **Database & Prisma ORM**
-  - `[x]` Define Prisma schema (`Company`, `User`, `LocationLog`)
+  - `[x]` Define Prisma schema (`Company`, `WebUser`, `MobileUser`, `LocationLog`)
+  - `[x]` Simplify `MobileUser` model (removed `assignedName`, set sequential unique `userId @unique` like `USR-1001`)
   - `[x]` Reset and synchronize schema with Neon PostgreSQL (`npx prisma db push --force-reset`)
-  - `[x]` Create seed script (`prisma/seed.ts`) and populate initial company (**Acme Corp**), admin user, employee accounts, and sample locations
-- `[x]` **Complete API Endpoint Suite (14 Active Routes)**
+  - `[x]` Create seed script (`prisma/seed.ts`) and populate initial company (**EPM Tracker Enterprise**), admin user, and sequential mobile user accounts (`USR-1001`, `USR-1002`, `USR-1003`)
+- `[x]` **Complete API Endpoint Suite**
   - `[x]` **Auth Module (`/api/v1/auth`)**: `POST /login`, `POST /register`, `GET /me`
   - `[x]` **Users Module (`/api/v1/users`)**: `GET /`, `GET /:id`, `POST /`, `PATCH /:id`, `DELETE /:id`
-  - `[x]` **Tracking Module (`/api/v1/tracking`)**: `POST /location`, `POST /location/batch`, `GET /latest`, `GET /history/:userId`, `GET /analytics`
+  - `[x]` **Tracking Module (`/api/v1/tracking`)**: `POST /location`, `POST /location/batch`, `GET /latest`, `GET /history/:userId`, `GET /analytics`, `GET /config`
   - `[x]` **Company Module (`/api/v1/company`)**: `GET /profile`, `PATCH /profile`
 - `[x]` **WebSockets Real-Time Live Gateway**
   - `[x]` Create `TrackingGateway` (`tracking.gateway.ts`) for Socket.io WebSocket streaming
@@ -61,8 +63,8 @@
     - `[x]` Travel duration calculation (hours & minutes) and visited stop locations counter
     - `[x]` Date picker input filter (`<input type="date">`) for history lookup
     - `[x]` Floating map telemetry overlay banner
-  - `[x]` `Employees.tsx`: Team employee management table with **View Travel Route** button linking directly to worker maps
-  - `[x]` `CompanySettings.tsx`: Connected to `GET/PATCH /company/profile` API
+  - `[x]` `Employees.tsx`: Mobile tracking devices table with **User ID** (`USR-1001`), **Device Hardware ID**, status badges, and CSV export
+  - `[x]` `CompanySettings.tsx`: Connected to `GET/PATCH /company/profile` API with Admin-configurable **Location Tracking Collection Interval** selector (1m, 2m, 5m, 10m, 15m)
 - `[x]` **Verification & Build**
   - `[x]` Verify clean Vite bundle compilation (`npm run build`)
   - `[x]` Dev server active on `http://localhost:5173/`
