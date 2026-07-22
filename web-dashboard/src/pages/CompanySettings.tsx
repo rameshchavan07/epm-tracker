@@ -8,12 +8,14 @@ import {
   AlertCircle,
   Sparkles,
   Server,
+  Clock,
 } from 'lucide-react';
 
 interface CompanyProfile {
   id: string;
   name: string;
   subscriptionPlan: string;
+  trackingInterval?: number;
   status: boolean;
   createdAt: string;
 }
@@ -22,6 +24,7 @@ const CompanySettings: React.FC = () => {
   const [company, setCompany] = useState<CompanyProfile | null>(null);
   const [name, setName] = useState('');
   const [subscriptionPlan, setSubscriptionPlan] = useState('PRO');
+  const [trackingInterval, setTrackingInterval] = useState<number>(2);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -35,6 +38,7 @@ const CompanySettings: React.FC = () => {
           setCompany(response.data);
           setName(response.data.name || '');
           setSubscriptionPlan(response.data.subscriptionPlan || 'PRO');
+          setTrackingInterval(response.data.trackingInterval ?? 2);
         }
       } catch (err) {
         console.error('Failed to load company profile', err);
@@ -57,6 +61,7 @@ const CompanySettings: React.FC = () => {
       const response = await apiClient.patch('/company/profile', {
         name,
         subscriptionPlan,
+        trackingInterval: Number(trackingInterval),
       });
 
       if (response.data) {
@@ -234,6 +239,60 @@ const CompanySettings: React.FC = () => {
               <Sparkles className="text-blue-400" size={20} style={{ flexShrink: 0, marginTop: '2px' }} />
               <div style={{ fontSize: '13px', color: '#93c5fd', lineHeight: '1.5' }}>
                 <strong>Pro Plan Highlights:</strong> Real-time GPS tracking, 30-day route history retention, WorkManager sync, and automated analytics reports.
+              </div>
+            </div>
+          </div>
+
+          {/* Location Tracking Frequency Card */}
+          <div className="glass-panel" style={{ padding: '24px', borderRadius: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+              <Clock className="text-blue-500" size={24} />
+              <h2 style={{ fontSize: '18px', fontWeight: '600', margin: 0, color: '#fff' }}>
+                Location Collection Frequency
+              </h2>
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '14px', color: '#94a3b8', marginBottom: '8px' }}>
+                GPS Fix & Ping Interval (Minutes)
+              </label>
+              <select
+                value={trackingInterval}
+                onChange={(e) => setTrackingInterval(Number(e.target.value))}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  background: 'rgba(0, 0, 0, 0.3)',
+                  color: '#fff',
+                  fontSize: '15px',
+                  outline: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value={1}>1 Minute (High Precision / Frequent Updates)</option>
+                <option value={2}>2 Minutes (Recommended Default)</option>
+                <option value={5}>5 Minutes (Balanced Battery & Tracking)</option>
+                <option value={10}>10 Minutes (Battery Saver Mode)</option>
+                <option value={15}>15 Minutes (Low Frequency Check-ins)</option>
+              </select>
+            </div>
+
+            <div
+              style={{
+                padding: '16px',
+                borderRadius: '12px',
+                background: 'rgba(59, 130, 246, 0.1)',
+                border: '1px solid rgba(59, 130, 246, 0.2)',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '12px',
+              }}
+            >
+              <Sparkles className="text-blue-400" size={20} style={{ flexShrink: 0, marginTop: '2px' }} />
+              <div style={{ fontSize: '13px', color: '#93c5fd', lineHeight: '1.5' }}>
+                <strong>Admin Configuration:</strong> Android mobile devices will automatically fetch this frequency setting and adjust their background location collection rate to <strong>every {trackingInterval} minute{trackingInterval > 1 ? 's' : ''}</strong>.
               </div>
             </div>
           </div>

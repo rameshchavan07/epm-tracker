@@ -8,29 +8,29 @@ import {
   Param,
   UseGuards,
 } from '@nestjs/common';
-import { UsersService } from './users.service';
+import { UsersService, UserResponse } from './users.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import * as bcrypt from 'bcrypt';
-import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { Prisma } from '@prisma/client';
+import { Prisma, WebUser } from '@prisma/client';
+
+export type WebUserWithoutPassword = Omit<WebUser, 'passwordHash'>;
 
 @Controller('users')
 @UseGuards(JwtAuthGuard)
 export class UsersController {
-  constructor(
-    private readonly usersService: UsersService,
-    private readonly prisma: PrismaService,
-  ) {}
+  constructor(private readonly usersService: UsersService) {}
 
   @Get()
-  async findAll() {
-    return this.usersService.findAll();
+  async findAll(): Promise<UserResponse[]> {
+    return await this.usersService.findAll();
   }
 
   @Get(':id')
-  async findOne(@Param('id') id: string) {
+  async findOne(
+    @Param('id') id: string,
+  ): Promise<WebUserWithoutPassword | null> {
     const user = await this.usersService.findById(id);
     if (!user) return null;
     const { passwordHash, ...result } = user;
@@ -39,14 +39,7 @@ export class UsersController {
   }
 
   @Post()
-  async create(@Body() body: CreateUserDto) {
-    let company = await this.prisma.company.findFirst();
-    if (!company) {
-      company = await this.prisma.company.create({
-        data: { name: 'Default Company' },
-      });
-    }
-
+  async create(@Body() body: CreateUserDto): Promise<WebUserWithoutPassword> {
     const salt = await bcrypt.genSalt(10);
     const rawPassword = body.password ?? 'password123';
     const passwordHash = await bcrypt.hash(rawPassword, salt);
@@ -55,8 +48,7 @@ export class UsersController {
       email: body.email,
       name: body.name,
       passwordHash,
-      role: body.role ?? 'EMPLOYEE',
-      company: { connect: { id: company.id } },
+      role: body.role ?? 'ADMIN',
     });
 
     const { passwordHash: unusedHash, ...result } = user;
@@ -65,8 +57,11 @@ export class UsersController {
   }
 
   @Patch(':id')
-  async update(@Param('id') id: string, @Body() body: UpdateUserDto) {
-    const updateData: Prisma.UserUpdateInput = {};
+  async update(
+    @Param('id') id: string,
+    @Body() body: UpdateUserDto,
+  ): Promise<WebUserWithoutPassword> {
+    const updateData: Prisma.WebUserUpdateInput = {};
     if (body.email) updateData.email = body.email;
     if (body.name) updateData.name = body.name;
     if (body.role) updateData.role = body.role;
@@ -84,7 +79,7 @@ export class UsersController {
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: string) {
-    return this.usersService.deleteUser(id);
+  async remove(@Param('id') id: string): Promise<WebUser> {
+    return await this.usersService.deleteUser(id);
   }
 }

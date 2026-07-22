@@ -1,7 +1,13 @@
 package com.epm.tracking.data
 
 import retrofit2.http.Body
+import retrofit2.http.GET
 import retrofit2.http.POST
+
+data class TrackingConfigResponse(
+    val trackingIntervalMinutes: Long,
+    val trackingIntervalMs: Long
+)
 
 data class LoginRequest(
     val userId: String,
@@ -25,16 +31,22 @@ data class LoginResponse(
 )
 
 data class LocationBatchRequest(
-    val userId: String,
+    val deviceId: String,
+    val userId: String? = null,
     val latitude: Double,
     val longitude: Double,
-    val accuracy: Float,
+    val accuracy: Float? = null,
+    val speed: Float? = null,
+    val batteryLevel: Int? = null,
     val timestamp: Long
 )
 
 data class SyncResponse(val success: Boolean, val count: Int)
 
 interface ApiService {
+    @GET("api/v1/tracking/config")
+    suspend fun getTrackingConfig(): TrackingConfigResponse
+
     @POST("api/v1/auth/login")
     suspend fun login(@Body request: LoginRequest): LoginResponse
 

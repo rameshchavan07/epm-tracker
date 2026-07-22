@@ -4,26 +4,13 @@ import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Seeding database...');
-
-  // 1. Create or find default Company
-  let company = await prisma.company.findFirst();
-  if (!company) {
-    company = await prisma.company.create({
-      data: {
-        name: 'Acme Corp (EPM)',
-        subscriptionPlan: 'PRO',
-        status: true,
-      },
-    });
-    console.log(`Created company: ${company.name} (${company.id})`);
-  }
+  console.log('Seeding database with Web Users and Mobile Devices...');
 
   const salt = await bcrypt.genSalt(10);
   const passwordHash = await bcrypt.hash('password123', salt);
 
-  // 2. Create Admin User
-  const admin = await prisma.user.upsert({
+  // 1. Create Web Admin User
+  const admin = await prisma.webUser.upsert({
     where: { email: 'admin@epm.com' },
     update: {},
     create: {
@@ -31,68 +18,72 @@ async function main() {
       name: 'Admin Manager',
       passwordHash,
       role: 'ADMIN',
-      companyId: company.id,
       status: true,
     },
   });
-  console.log(`Admin user ready: ${admin.email}`);
+  console.log(`Web Admin user ready: ${admin.email}`);
 
-  // 3. Create Sample Employees
-  const employees = [
+  // 2. Create Sample Mobile Users (Devices tracking without login)
+  const mobileDevices = [
     {
-      name: 'Aarav Sharma',
-      email: 'aarav@epm.com',
-      role: 'Field Technician',
+      deviceId: 'device-android-001',
+      userId: 'USR-1001',
       lat: 19.076,
       lng: 72.8777,
       status: true,
     },
     {
-      name: 'Priya Patel',
-      email: 'priya@epm.com',
-      role: 'Delivery Lead',
+      deviceId: 'device-android-002',
+      userId: 'USR-1002',
       lat: 28.7041,
       lng: 77.1025,
       status: true,
     },
     {
-      name: 'Rahul Desai',
-      email: 'rahul@epm.com',
-      role: 'Sales Executive',
+      deviceId: 'device-android-003',
+      userId: 'USR-1003',
       lat: 12.9716,
       lng: 77.5946,
       status: false,
     },
   ];
 
-  for (const emp of employees) {
-    const user = await prisma.user.upsert({
-      where: { email: emp.email },
-      update: { status: emp.status },
+  for (const dev of mobileDevices) {
+    const mobileUser = await prisma.mobileUser.upsert({
+      where: { deviceId: dev.deviceId },
+      update: {
+        userId: dev.userId,
+        latitude: dev.lat,
+        longitude: dev.lng,
+        lastLocationAt: new Date(),
+        status: dev.status,
+      },
       create: {
-        email: emp.email,
-        name: emp.name,
-        passwordHash,
-        role: 'EMPLOYEE',
-        companyId: company.id,
-        status: emp.status,
+        deviceId: dev.deviceId,
+        userId: dev.userId,
+        latitude: dev.lat,
+        longitude: dev.lng,
+        lastLocationAt: new Date(),
+        status: dev.status,
       },
     });
 
-    // Create a location log for this user
     await prisma.locationLog.create({
       data: {
-        userId: user.id,
-        companyId: company.id,
-        latitude: emp.lat,
-        longitude: emp.lng,
+        mobileUserId: mobileUser.id,
+        deviceId: dev.deviceId,
+        latitude: dev.lat,
+        longitude: dev.lng,
         accuracy: 10.0,
         speed: 15.5,
         batteryLevel: Math.floor(Math.random() * 40) + 60,
         recordedAt: new Date(),
       },
     });
-    console.log(`Employee ready with location: ${user.name}`);
+
+    console.log(
+      `Mobile device ready: ${mobileUser.userId} (${mobileUser.deviceId})`,
+    );
   }
 
   console.log('Seeding completed successfully!');

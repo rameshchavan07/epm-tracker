@@ -45,6 +45,11 @@ export class TrackingController {
     return this.trackingService.getLocationHistory(userId, limitNum, date);
   }
 
+  @Get('config')
+  async getTrackingConfig() {
+    return this.trackingService.getTrackingConfig();
+  }
+
   @Get('analytics')
   async getAnalytics() {
     return this.trackingService.getAnalytics();

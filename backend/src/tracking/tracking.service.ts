@@ -1,20 +1,40 @@
 import { Injectable, Inject, forwardRef, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateLocationLogDto } from './dto/create-location-log.dto';
 import { TrackingGateway } from './tracking.gateway';
+import { LocationLog } from '@prisma/client';
 
-interface LatestLocationRaw {
+export interface LocationHistoryItem {
   id: string;
-  userId: string;
-  latitude: number;
-  longitude: number;
-  accuracy: number;
-  recordedAt: Date;
+  mobileUserId: string;
+  deviceId: string;
+  lat: number;
+  lng: number;
+  accuracy: number | null;
+  speed: number | null;
   batteryLevel: number | null;
+  recordedAt: Date;
+}
+
+export interface LatestLocationItem {
+  id: string;
+  deviceId: string;
+  userId: string;
   name: string;
-  role: string;
-  status: boolean;
+  status: string;
+  lat: number | null;
+  lng: number | null;
+  battery: number;
+  recordedAt: Date | null;
+}
+
+export interface AnalyticsResult {
+  activeUsers: number;
+  offlineUsers: number;
+  totalUsers: number;
+  totalLogsToday: number;
+  avgBattery: number;
 }
 
 @Injectable()
@@ -27,84 +47,117 @@ export class TrackingService {
     private trackingGateway: TrackingGateway,
   ) {}
 
+  async getTrackingConfig() {
+    const company = await this.prisma.company.findFirst();
+    const intervalMinutes = company?.trackingInterval ?? 2;
+    return {
+      trackingIntervalMinutes: intervalMinutes,
+      trackingIntervalMs: intervalMinutes * 60 * 1000,
+    };
+  }
+
+  private async generateSequentialUserId(): Promise<string> {
+    const count = await this.prisma.mobileUser.count();
+    let nextNum = 1001 + count;
+    let candidate = `USR-${nextNum}`;
+
+    while (
+      await this.prisma.mobileUser.findUnique({ where: { userId: candidate } })
+    ) {
+      nextNum++;
+      candidate = `USR-${nextNum}`;
+    }
+
+    return candidate;
+  }
+
   async processBatch(locations: CreateLocationLogDto[]) {
     if (!locations || locations.length === 0) {
       return { success: true, count: 0 };
     }
 
-    let defaultCompany = await this.prisma.company.findFirst();
-    if (!defaultCompany) {
-      defaultCompany = await this.prisma.company.create({
-        data: { name: 'Acme Corp' },
-      });
-    }
+    let processedCount = 0;
 
-    const data = locations.map((loc) => ({
-      userId: loc.userId,
-      companyId: defaultCompany.id,
-      deviceId: loc.deviceId,
-      latitude: loc.latitude,
-      longitude: loc.longitude,
-      accuracy: loc.accuracy,
-      recordedAt: new Date(loc.timestamp),
-    }));
+    for (const loc of locations) {
+      try {
+        const recordedAt = new Date(loc.timestamp);
 
-    try {
-      await this.prisma.locationLog.createMany({
-        data,
-        skipDuplicates: true,
-      });
+        // 1. Find or create MobileUser with sequential User ID (USR-1001, USR-1002...)
+        let mobileUser = await this.prisma.mobileUser.findUnique({
+          where: { deviceId: loc.deviceId },
+        });
 
-      const userUpdates = locations.reduce((acc, loc) => {
-        if (!acc[loc.userId] || acc[loc.userId].timestamp < loc.timestamp) {
-          acc[loc.userId] = loc;
+        if (mobileUser) {
+          mobileUser = await this.prisma.mobileUser.update({
+            where: { deviceId: loc.deviceId },
+            data: {
+              latitude: loc.latitude,
+              longitude: loc.longitude,
+              lastLocationAt: recordedAt,
+              status: true,
+            },
+          });
+        } else {
+          const generatedUserId = await this.generateSequentialUserId();
+          mobileUser = await this.prisma.mobileUser.create({
+            data: {
+              deviceId: loc.deviceId,
+              userId: loc.mobileUserId || generatedUserId,
+              latitude: loc.latitude,
+              longitude: loc.longitude,
+              lastLocationAt: recordedAt,
+              status: true,
+            },
+          });
         }
-        return acc;
-      }, {} as Record<string, CreateLocationLogDto>);
 
-      for (const [userId, loc] of Object.entries(userUpdates)) {
-        await this.prisma.user.update({
-          where: { id: userId },
+        // 2. Insert LocationLog
+        await this.prisma.locationLog.create({
           data: {
-            status: true,
+            mobileUserId: mobileUser.id,
             deviceId: loc.deviceId,
-            lastLatitude: loc.latitude,
-            lastLongitude: loc.longitude,
-            lastLocationAt: new Date(loc.timestamp),
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            accuracy: loc.accuracy ?? null,
+            speed: loc.speed ?? null,
+            batteryLevel: loc.batteryLevel ?? null,
+            recordedAt,
           },
         });
-      }
 
-      // Broadcast WebSocket live location update to connected dashboard clients
-      if (locations.length > 0) {
-        const lastLoc = locations[locations.length - 1];
-        const user = await this.prisma.user.findUnique({
-          where: { id: lastLoc.userId },
-        });
+        processedCount++;
+
+        // 3. Broadcast WebSocket update to web dashboard
         this.trackingGateway.broadcastLocationUpdate({
-          id: lastLoc.userId,
-          name: user?.name || 'Employee',
-          role: user?.role || 'EMPLOYEE',
+          id: mobileUser.id,
+          deviceId: mobileUser.deviceId,
+          name: mobileUser.userId,
           status: 'Active',
-          lat: lastLoc.latitude,
-          lng: lastLoc.longitude,
-          battery: 90,
-          recordedAt: new Date(lastLoc.timestamp),
+          lat: loc.latitude,
+          lng: loc.longitude,
+          battery: loc.batteryLevel ?? 90,
+          recordedAt,
         });
+      } catch (error) {
+        this.logger.error(
+          `Error processing location for ${loc.deviceId}:`,
+          error,
+        );
       }
-    } catch (error) {
-      console.error('Error inserting batch:', error);
     }
 
-    return { success: true, count: data.length };
+    return { success: true, count: processedCount };
   }
 
   async processSingle(location: CreateLocationLogDto) {
-    return this.processBatch([location]);
+    return await this.processBatch([location]);
   }
 
-  async getLocationHistory(userId: string, limit = 100, date?: string) {
-    // Build date range filter if a specific date was requested
+  async getLocationHistory(
+    identifier: string,
+    limit = 100,
+    date?: string,
+  ): Promise<LocationHistoryItem[]> {
     const dateFilter = date
       ? {
           gte: new Date(`${date}T00:00:00.000Z`),
@@ -112,56 +165,58 @@ export class TrackingService {
         }
       : undefined;
 
-    const logs = await this.prisma.locationLog.findMany({
+    const logs: LocationLog[] = await this.prisma.locationLog.findMany({
       where: {
-        userId,
+        OR: [{ mobileUserId: identifier }, { deviceId: identifier }],
         ...(dateFilter ? { recordedAt: dateFilter } : {}),
       },
       orderBy: { recordedAt: 'desc' },
       take: limit,
     });
 
-    return logs.map((log) => ({
+    return logs.map((log: LocationLog) => ({
       id: log.id,
-      userId: log.userId,
+      mobileUserId: log.mobileUserId,
+      deviceId: log.deviceId,
       lat: log.latitude,
       lng: log.longitude,
       accuracy: log.accuracy,
       speed: log.speed,
+      batteryLevel: log.batteryLevel,
       recordedAt: log.recordedAt,
     }));
   }
 
-  async getLatestLocations() {
-    const latestLocations = await this.prisma.$queryRaw<LatestLocationRaw[]>`
-      SELECT DISTINCT ON (l."userId") 
-        l."id", l."userId", l."latitude", l."longitude", l."accuracy", l."recordedAt", l."batteryLevel",
-        u."name", u."role", u."status"
-      FROM "LocationLog" l
-      JOIN "User" u ON l."userId" = u."id"
-      ORDER BY l."userId", l."recordedAt" DESC
-    `;
+  async getLatestLocations(): Promise<LatestLocationItem[]> {
+    const mobileUsers = await this.prisma.mobileUser.findMany({
+      where: {
+        latitude: { not: null },
+        longitude: { not: null },
+      },
+      orderBy: { lastLocationAt: 'desc' },
+    });
 
-    return latestLocations.map((loc) => ({
-      id: loc.userId,
-      name: loc.name,
-      role: loc.role,
-      status: loc.status ? 'Active' : 'Offline',
-      lat: loc.latitude,
-      lng: loc.longitude,
-      battery: loc.batteryLevel ?? 85,
-      recordedAt: loc.recordedAt,
+    return mobileUsers.map((user) => ({
+      id: user.id,
+      deviceId: user.deviceId,
+      userId: user.userId,
+      name: user.userId,
+      status: user.status ? 'Active' : 'Offline',
+      lat: user.latitude,
+      lng: user.longitude,
+      battery: 90,
+      recordedAt: user.lastLocationAt,
     }));
   }
 
-  async getAnalytics() {
-    const activeUsers = await this.prisma.user.count({
+  async getAnalytics(): Promise<AnalyticsResult> {
+    const activeDevices = await this.prisma.mobileUser.count({
       where: { status: true },
     });
-    const offlineUsers = await this.prisma.user.count({
+    const offlineDevices = await this.prisma.mobileUser.count({
       where: { status: false },
     });
-    const totalUsers = await this.prisma.user.count();
+    const totalDevices = await this.prisma.mobileUser.count();
     const totalLogsToday = await this.prisma.locationLog.count({
       where: {
         recordedAt: {
@@ -171,48 +226,51 @@ export class TrackingService {
     });
 
     return {
-      activeUsers,
-      offlineUsers,
-      totalUsers,
+      activeUsers: activeDevices,
+      offlineUsers: offlineDevices,
+      totalUsers: totalDevices,
       totalLogsToday,
-      avgBattery: 88,
+      avgBattery: 90,
     };
   }
 
-  // Runs every 2 minutes — marks users offline if no location received in 5+ minutes
+  // Runs every 2 minutes — marks mobile devices offline if no location received in 5+ minutes
   @Cron('0 */2 * * * *')
-  async markOfflineUsers() {
+  async markOfflineUsers(): Promise<void> {
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
 
-    const staleUsers = await this.prisma.user.findMany({
+    const staleDevices = await this.prisma.mobileUser.findMany({
       where: {
-        status: true, // currently marked active
+        status: true,
         OR: [
-          { lastLocationAt: { lt: fiveMinutesAgo } }, // last ping was >5 min ago
-          { lastLocationAt: null },                   // never sent a location
+          { lastLocationAt: { lt: fiveMinutesAgo } },
+          { lastLocationAt: null },
         ],
       },
-      select: { id: true, name: true, role: true },
+      select: { id: true, deviceId: true, userId: true },
     });
 
-    if (staleUsers.length === 0) return;
+    if (staleDevices.length === 0) return;
 
-    // Bulk-mark them offline in the DB
-    await this.prisma.user.updateMany({
-      where: { id: { in: staleUsers.map((u) => u.id) } },
+    const staleIds = staleDevices.map((d) => d.id);
+    await this.prisma.mobileUser.updateMany({
+      where: { id: { in: staleIds } },
       data: { status: false },
     });
 
+    const deviceNames = staleDevices
+      .map((d) => d.userId || d.deviceId)
+      .join(', ');
     this.logger.log(
-      `Marked ${staleUsers.length} user(s) offline: ${staleUsers.map((u) => u.name).join(', ')}`,
+      `Marked ${staleDevices.length} device(s) offline: ${deviceNames}`,
     );
 
-    // Push real-time status update to the web dashboard via WebSocket
-    for (const user of staleUsers) {
+    for (const device of staleDevices) {
+      const displayName = device.userId || device.deviceId;
       this.trackingGateway.broadcastLocationUpdate({
-        id: user.id,
-        name: user.name,
-        role: user.role,
+        id: device.id,
+        deviceId: device.deviceId,
+        name: displayName,
         status: 'Offline',
         lat: null,
         lng: null,

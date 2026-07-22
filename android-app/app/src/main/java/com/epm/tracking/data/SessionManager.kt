@@ -42,6 +42,14 @@ class SessionManager(context: Context) {
         return sharedPreferences.getString(KEY_SHORT_ID, null)
     }
 
+    fun saveTrackingInterval(intervalMs: Long) {
+        sharedPreferences.edit().putLong(KEY_TRACKING_INTERVAL, intervalMs).apply()
+    }
+
+    fun getTrackingInterval(): Long {
+        return sharedPreferences.getLong(KEY_TRACKING_INTERVAL, 120000L)
+    }
+
     fun clearSession() {
         sharedPreferences.edit().clear().apply()
     }
@@ -50,5 +58,6 @@ class SessionManager(context: Context) {
         private const val KEY_AUTH_TOKEN = "auth_token"
         private const val KEY_USER_ID = "user_id"
         private const val KEY_SHORT_ID = "short_id"
+        private const val KEY_TRACKING_INTERVAL = "tracking_interval_ms"
     }
 }

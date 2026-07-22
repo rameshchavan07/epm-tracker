@@ -1,31 +1,40 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { User, Prisma } from '@prisma/client';
+import { WebUser, Prisma } from '@prisma/client';
+
+export interface UserResponse {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  status: string;
+  createdAt: Date;
+}
 
 @Injectable()
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
-  async findByEmail(email: string): Promise<User | null> {
-    return this.prisma.user.findUnique({
+  async findByEmail(email: string): Promise<WebUser | null> {
+    return await this.prisma.webUser.findUnique({
       where: { email },
     });
   }
 
-  async findById(id: string): Promise<User | null> {
-    return this.prisma.user.findUnique({
+  async findById(id: string): Promise<WebUser | null> {
+    return await this.prisma.webUser.findUnique({
       where: { id },
     });
   }
 
-  async createUser(data: Prisma.UserCreateInput): Promise<User> {
-    return this.prisma.user.create({
+  async createUser(data: Prisma.WebUserCreateInput): Promise<WebUser> {
+    return await this.prisma.webUser.create({
       data,
     });
   }
 
-  async findAll() {
-    const users = await this.prisma.user.findMany({
+  async findAll(): Promise<UserResponse[]> {
+    const users = await this.prisma.webUser.findMany({
       select: {
         id: true,
         email: true,
@@ -33,26 +42,27 @@ export class UsersService {
         role: true,
         status: true,
         createdAt: true,
-        shortId: true,
-        deviceId: true,
       },
     });
 
     return users.map((user) => ({
       ...user,
-      status: user.status ? 'Active' : 'Offline',
+      status: user.status ? 'Active' : 'Inactive',
     }));
   }
 
-  async updateUser(id: string, data: Prisma.UserUpdateInput): Promise<User> {
-    return this.prisma.user.update({
+  async updateUser(
+    id: string,
+    data: Prisma.WebUserUpdateInput,
+  ): Promise<WebUser> {
+    return await this.prisma.webUser.update({
       where: { id },
       data,
     });
   }
 
-  async deleteUser(id: string): Promise<User> {
-    return this.prisma.user.delete({
+  async deleteUser(id: string): Promise<WebUser> {
+    return await this.prisma.webUser.delete({
       where: { id },
     });
   }

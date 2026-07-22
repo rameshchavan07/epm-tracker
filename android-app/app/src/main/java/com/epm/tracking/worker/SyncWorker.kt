@@ -3,6 +3,7 @@ package com.epm.tracking.worker
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import android.provider.Settings
 import com.epm.tracking.data.ApiClient
 import com.epm.tracking.data.LocationBatchRequest
 import com.epm.tracking.data.SessionManager
@@ -17,11 +18,7 @@ class SyncWorker(
         val database = AppDatabase.getDatabase(applicationContext)
         val sessionManager = SessionManager(applicationContext)
 
-        // No auth token → user hasn't logged in yet, skip sync
-        val token = sessionManager.getAuthToken() ?: return Result.failure()
-
-        // No user ID → can't attribute location to a user
-        val userId = sessionManager.getUserId() ?: return Result.failure()
+        val deviceId = Settings.Secure.getString(applicationContext.contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
 
         return try {
             val unsyncedLocations = database.locationDao().getUnsyncedLocations()
@@ -32,7 +29,8 @@ class SyncWorker(
             val apiService = ApiClient.getService(sessionManager)
             val batchRequest = unsyncedLocations.map { loc ->
                 LocationBatchRequest(
-                    userId    = userId,
+                    deviceId  = loc.deviceId.ifEmpty { deviceId },
+                    userId    = loc.userId,
                     latitude  = loc.latitude,
                     longitude = loc.longitude,
                     accuracy  = loc.accuracy,

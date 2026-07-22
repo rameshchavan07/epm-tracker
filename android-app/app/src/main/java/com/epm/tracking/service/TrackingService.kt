@@ -75,6 +75,21 @@ class TrackingService : Service() {
         val sessionManager = SessionManager(applicationContext)
         val db = AppDatabase.getDatabase(applicationContext)
 
+        // Fetch dynamic tracking interval setting from backend on service startup
+        serviceScope.launch {
+            try {
+                val apiService = ApiClient.getService(sessionManager)
+                val config = apiService.getTrackingConfig()
+                if (config.trackingIntervalMs > 0) {
+                    sessionManager.saveTrackingInterval(config.trackingIntervalMs)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        val trackingInterval = sessionManager.getTrackingInterval()
+
         // Resolve the logged-in user's real ID and device ID
         val userId   = sessionManager.getUserId()
         val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
@@ -108,6 +123,7 @@ class TrackingService : Service() {
                             val response = apiService.syncLocations(
                                 listOf(
                                     LocationBatchRequest(
+                                        deviceId  = deviceId,
                                         userId    = userId,
                                         latitude  = lat,
                                         longitude = lng,

@@ -1,4 +1,4 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class UpdateCompanyDto {
   @IsString()
@@ -8,4 +8,8 @@ export class UpdateCompanyDto {
   @IsString()
   @IsOptional()
   subscriptionPlan?: string;
+
+  @IsNumber()
+  @IsOptional()
+  trackingInterval?: number;
 }

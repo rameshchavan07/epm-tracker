@@ -1,8 +1,35 @@
+import { IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+
 export class CreateLocationLogDto {
-  userId: string;
+  @IsString()
+  @IsNotEmpty()
   deviceId: string;
+
+  @IsString()
+  @IsOptional()
+  mobileUserId?: string;
+
+  @IsNumber()
+  @IsNotEmpty()
   latitude: number;
+
+  @IsNumber()
+  @IsNotEmpty()
   longitude: number;
-  accuracy: number;
+
+  @IsNumber()
+  @IsOptional()
+  accuracy?: number;
+
+  @IsNumber()
+  @IsOptional()
+  speed?: number;
+
+  @IsNumber()
+  @IsOptional()
+  batteryLevel?: number;
+
+  @IsNumber()
+  @IsNotEmpty()
   timestamp: number;
 }

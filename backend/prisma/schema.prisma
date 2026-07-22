@@ -9,46 +9,52 @@ datasource db {
 
 model Company {
   id               String   @id @default(uuid())
-  name             String
-  subscriptionPlan String   @default("FREE")
+  name             String   @default("Acme Corp")
+  subscriptionPlan String   @default("PRO")
+  trackingInterval Int      @default(2)
   status           Boolean  @default(true)
   createdAt        DateTime @default(now())
-
-  users User[]
+  updatedAt        DateTime @updatedAt
 }
 
-model User {
+model WebUser {
   id           String   @id @default(uuid())
-  companyId    String
-  role         String   @default("EMPLOYEE")
   name         String
   email        String   @unique
   passwordHash String
-  deviceId     String?
-  shortId      String?  @unique
-  lastLatitude Float?
-  lastLongitude Float?
-  lastLocationAt DateTime?
+  role         String   @default("ADMIN")
   status       Boolean  @default(true)
   createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
 
-  company      Company       @relation(fields: [companyId], references: [id])
-  locationLogs LocationLog[]
+model MobileUser {
+  id             String        @id @default(uuid())
+  deviceId       String        @unique
+  userId         String        @unique
+  latitude       Float?
+  longitude      Float?
+  lastLocationAt DateTime?
+  status         Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  locationLogs   LocationLog[]
 }
 
 model LocationLog {
-  id           String   @id @default(uuid())
-  companyId    String
-  userId       String
-  deviceId     String?
+  id           String     @id @default(uuid())
+  mobileUserId String
+  deviceId     String
   latitude     Float
   longitude    Float
-  accuracy     Float
+  accuracy     Float?
   speed        Float?
   batteryLevel Int?
-  recordedAt   DateTime
+  recordedAt   DateTime   @default(now())
 
-  user User @relation(fields: [userId], references: [id])
+  mobileUser   MobileUser @relation(fields: [mobileUserId], references: [id], onDelete: Cascade)
 
-  @@index([userId, recordedAt])
+  @@index([mobileUserId, recordedAt])
+  @@index([deviceId, recordedAt])
 }
