@@ -34,6 +34,14 @@ class SessionManager(context: Context) {
         return sharedPreferences.getString(KEY_USER_ID, null)
     }
 
+    fun saveShortId(shortId: String) {
+        sharedPreferences.edit().putString(KEY_SHORT_ID, shortId).apply()
+    }
+
+    fun getShortId(): String? {
+        return sharedPreferences.getString(KEY_SHORT_ID, null)
+    }
+
     fun clearSession() {
         sharedPreferences.edit().clear().apply()
     }
@@ -41,5 +49,6 @@ class SessionManager(context: Context) {
     companion object {
         private const val KEY_AUTH_TOKEN = "auth_token"
         private const val KEY_USER_ID = "user_id"
+        private const val KEY_SHORT_ID = "short_id"
     }
 }

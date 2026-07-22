@@ -33,6 +33,8 @@ export class UsersService {
         role: true,
         status: true,
         createdAt: true,
+        shortId: true,
+        deviceId: true,
       },
     });
 

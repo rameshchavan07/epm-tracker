@@ -39,9 +39,10 @@ export class TrackingController {
   async getLocationHistory(
     @Param('userId') userId: string,
     @Query('limit') limit?: string,
+    @Query('date') date?: string,
   ) {
     const limitNum = limit ? parseInt(limit, 10) : 100;
-    return this.trackingService.getLocationHistory(userId, limitNum);
+    return this.trackingService.getLocationHistory(userId, limitNum, date);
   }
 
   @Get('analytics')

@@ -6,9 +6,12 @@ import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './jwt.strategy';
 import { AuthController } from './auth.controller';
 
+import { TrackingModule } from '../tracking/tracking.module';
+
 @Module({
   imports: [
     UsersModule,
+    TrackingModule,
     PassportModule,
     JwtModule.register({
       secret:

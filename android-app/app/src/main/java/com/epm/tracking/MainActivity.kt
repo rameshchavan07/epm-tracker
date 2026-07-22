@@ -1,8 +1,11 @@
 package com.epm.tracking
 
+import android.Manifest
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -19,11 +22,37 @@ import com.epm.tracking.worker.SyncWorker
 import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
+
+    // Build the list of permissions we need to request at runtime
+    private val requiredPermissions: Array<String>
+        get() {
+            val perms = mutableListOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            )
+            // POST_NOTIFICATIONS is only required on Android 13+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                perms.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            return perms.toTypedArray()
+        }
+
+    // Launcher that shows the system permission dialog for all required permissions at once
+    private val permissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
+            // results: Map<permission, granted>
+            // No crash handling needed here — DashboardScreen guards the service start
+            // and shows a message if permission was denied.
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
+        // Request permissions as soon as the app opens
+        permissionLauncher.launch(requiredPermissions)
+
         setupSyncWorker()
-        
+
         setContent {
             MaterialTheme {
                 Surface(
@@ -33,7 +62,6 @@ class MainActivity : ComponentActivity() {
                     com.epm.tracking.ui.navigation.AppNavigation()
                 }
             }
-        }
         }
     }
 

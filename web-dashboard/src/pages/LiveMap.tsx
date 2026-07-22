@@ -141,10 +141,15 @@ const LiveMap: React.FC = () => {
           const index = prev.findIndex((e) => e.id === updatedUser.id);
           if (index !== -1) {
             const next = [...prev];
+            // Merge the update — lat/lng may be null when user goes offline
             next[index] = { ...next[index], ...updatedUser };
             return next;
           }
-          return [updatedUser, ...prev];
+          // Only add new entry if it has a valid position
+          if (updatedUser.lat != null && updatedUser.lng != null) {
+            return [updatedUser, ...prev];
+          }
+          return prev;
         });
       });
     });
@@ -188,10 +193,12 @@ const LiveMap: React.FC = () => {
   }, []);
 
   // Fetch route history when toggling or changing active employee
-  const fetchRouteHistory = async (userId: string) => {
+  const fetchRouteHistory = async (userId: string, date?: string) => {
     try {
       const { default: apiClient } = await import('../api/client');
-      const response = await apiClient.get(`/tracking/history/${userId}`);
+      // Pass the date filter so only that day's records come back
+      const params = date ? `?date=${date}&limit=500` : '?limit=500';
+      const response = await apiClient.get(`/tracking/history/${userId}${params}`);
       if (response.data && Array.isArray(response.data)) {
         // Reverse so chronologically ordered (oldest to newest)
         const sorted = [...response.data].reverse();
@@ -239,10 +246,16 @@ const LiveMap: React.FC = () => {
     const nextState = !showHistory;
     setShowHistory(nextState);
     if (nextState && activeEmployee) {
-      void fetchRouteHistory(activeEmployee.id);
+      void fetchRouteHistory(activeEmployee.id, selectedDate);
     } else {
       setIsPlaying(false);
     }
+  };
+
+  const copyCoordinates = (lat: number, lng: number) => {
+    navigator.clipboard.writeText(`${lat.toFixed(6)}, ${lng.toFixed(6)}`).then(() => {
+      // Flash a brief visual confirmation — handled with title tooltip
+    });
   };
 
   const centerOnMe = () => {
@@ -358,6 +371,62 @@ const LiveMap: React.FC = () => {
             </button>
           )}
 
+          {/* Active Employee Coordinates Panel */}
+          {activeEmployee && activeEmployee.lat != null && (
+            <div
+              style={{
+                background: 'rgba(59,130,246,0.08)',
+                border: '1px solid rgba(59,130,246,0.25)',
+                borderRadius: '12px',
+                padding: '12px 14px',
+                marginBottom: '16px',
+              }}
+            >
+              <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                📍 {activeEmployee.name} — Exact Position
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '12px', color: '#94a3b8' }}>Latitude</span>
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: '#60a5fa', fontFamily: 'monospace' }}>
+                    {(activeEmployee.lat as number).toFixed(6)}°
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '12px', color: '#94a3b8' }}>Longitude</span>
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: '#60a5fa', fontFamily: 'monospace' }}>
+                    {(activeEmployee.lng as number).toFixed(6)}°
+                  </span>
+                </div>
+                {activeEmployee.recordedAt && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>Last seen</span>
+                    <span style={{ fontSize: '11px', color: '#34d399' }}>
+                      {new Date(activeEmployee.recordedAt).toLocaleTimeString()}
+                    </span>
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => copyCoordinates(activeEmployee.lat, activeEmployee.lng)}
+                title="Copy to clipboard"
+                style={{
+                  marginTop: '8px',
+                  width: '100%',
+                  padding: '5px',
+                  fontSize: '11px',
+                  background: 'rgba(59,130,246,0.15)',
+                  border: '1px solid rgba(59,130,246,0.3)',
+                  borderRadius: '6px',
+                  color: '#93c5fd',
+                  cursor: 'pointer',
+                }}
+              >
+                📋 Copy Coordinates
+              </button>
+            </div>
+          )}
+
           {loading ? (
             <div className="text-center text-secondary py-4">Loading team...</div>
           ) : (
@@ -369,7 +438,17 @@ const LiveMap: React.FC = () => {
               >
                 <div className="emp-info">
                   <h4>{emp.name}</h4>
-                  <p>{emp.role}</p>
+                  <p style={{ fontSize: '11px', color: '#94a3b8', margin: '2px 0 0' }}>{emp.role}</p>
+                  {emp.lat != null && (
+                    <p style={{ fontSize: '10px', color: '#64748b', fontFamily: 'monospace', marginTop: '2px' }}>
+                      {(emp.lat as number).toFixed(4)}, {(emp.lng as number).toFixed(4)}
+                    </p>
+                  )}
+                  {emp.recordedAt && (
+                    <p style={{ fontSize: '10px', color: '#475569', marginTop: '1px' }}>
+                      {new Date(emp.recordedAt).toLocaleTimeString()}
+                    </p>
+                  )}
                 </div>
                 <div
                   className={`status-indicator ${(emp.status || 'offline').toLowerCase()}`}
@@ -400,19 +479,92 @@ const LiveMap: React.FC = () => {
             </Marker>
           )}
 
-          {/* Render Active Employees */}
+          {/* Render Active Employees — skip offline users (lat is null) */}
           {!showHistory &&
-            employees.map((emp) => (
+            employees
+              .filter((emp) => emp.lat != null && emp.lng != null)
+              .map((emp) => (
               <Marker key={emp.id} position={[emp.lat, emp.lng]}>
-                <Popup>
-                  <div className="popup-content">
-                    <strong>{emp.name}</strong>
-                    <br />
-                    Role: {emp.role}
-                    <br />
-                    Status: {emp.status}
-                    <br />
-                    Battery: {emp.battery}%
+                <Popup maxWidth={260}>
+                  <div className="popup-content" style={{ minWidth: '220px' }}>
+                    <div style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '6px', marginBottom: '8px' }}>
+                      <strong style={{ fontSize: '14px' }}>{emp.name}</strong>
+                      <span
+                        style={{
+                          marginLeft: '8px',
+                          fontSize: '11px',
+                          padding: '2px 6px',
+                          borderRadius: '10px',
+                          background: emp.status === 'Active' ? '#dcfce7' : '#f1f5f9',
+                          color: emp.status === 'Active' ? '#16a34a' : '#64748b',
+                        }}
+                      >
+                        {emp.status}
+                      </span>
+                    </div>
+                    <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
+                      <tbody>
+                        <tr>
+                          <td style={{ color: '#64748b', paddingBottom: '3px', paddingRight: '8px' }}>Role</td>
+                          <td style={{ fontWeight: 600 }}>{emp.role}</td>
+                        </tr>
+                        <tr>
+                          <td style={{ color: '#64748b', paddingBottom: '3px', paddingRight: '8px' }}>Latitude</td>
+                          <td style={{ fontWeight: 700, fontFamily: 'monospace', color: '#1d4ed8' }}>{(emp.lat as number).toFixed(6)}°</td>
+                        </tr>
+                        <tr>
+                          <td style={{ color: '#64748b', paddingBottom: '3px', paddingRight: '8px' }}>Longitude</td>
+                          <td style={{ fontWeight: 700, fontFamily: 'monospace', color: '#1d4ed8' }}>{(emp.lng as number).toFixed(6)}°</td>
+                        </tr>
+                        <tr>
+                          <td style={{ color: '#64748b', paddingBottom: '3px', paddingRight: '8px' }}>Accuracy</td>
+                          <td style={{ fontWeight: 600 }}>±{emp.accuracy != null ? `${Math.round(emp.accuracy)} m` : 'N/A'}</td>
+                        </tr>
+                        <tr>
+                          <td style={{ color: '#64748b', paddingBottom: '3px', paddingRight: '8px' }}>Battery</td>
+                          <td style={{ fontWeight: 600 }}>{emp.battery}%</td>
+                        </tr>
+                        {emp.recordedAt && (
+                          <tr>
+                            <td style={{ color: '#64748b', paddingRight: '8px' }}>Last Update</td>
+                            <td style={{ fontWeight: 600 }}>{new Date(emp.recordedAt).toLocaleTimeString()}</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                    <button
+                      onClick={() => copyCoordinates(emp.lat, emp.lng)}
+                      style={{
+                        marginTop: '8px',
+                        width: '100%',
+                        padding: '5px 8px',
+                        fontSize: '11px',
+                        background: '#eff6ff',
+                        border: '1px solid #bfdbfe',
+                        borderRadius: '6px',
+                        color: '#1d4ed8',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                      }}
+                    >
+                      📋 Copy Coordinates
+                    </button>
+                    <a
+                      href={`https://www.google.com/maps?q=${emp.lat},${emp.lng}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        display: 'block',
+                        marginTop: '6px',
+                        textAlign: 'center',
+                        fontSize: '11px',
+                        color: '#2563eb',
+                        textDecoration: 'none',
+                        fontWeight: 600,
+                      }}
+                    >
+                      🗺 Open in Google Maps ↗
+                    </a>
                   </div>
                 </Popup>
               </Marker>
@@ -435,25 +587,52 @@ const LiveMap: React.FC = () => {
                 <CircleMarker
                   key={log.id || index}
                   center={[log.lat, log.lng]}
-                  radius={index === playbackStep ? 9 : 5}
+                  radius={index === playbackStep ? 10 : 5}
                   pathOptions={{
                     color: index === playbackStep ? '#ef4444' : '#3b82f6',
                     fillColor: index === playbackStep ? '#ef4444' : '#60a5fa',
                     fillOpacity: index === playbackStep ? 1 : 0.7,
                   }}
                 >
-                  <Popup>
-                    <div className="popup-content">
-                      <strong>Breadcrumb #{index + 1}</strong>
-                      <br />
-                      Time:{' '}
-                      {new Date(log.recordedAt).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit',
-                      })}
-                      <br />
-                      Speed: {log.speed ?? 0} km/h
+                  <Popup maxWidth={240}>
+                    <div className="popup-content" style={{ minWidth: '200px' }}>
+                      <strong style={{ fontSize: '13px' }}>
+                        {index === playbackStep ? '📍 Current Position' : `Stop #${index + 1}`}
+                      </strong>
+                      <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse', marginTop: '6px' }}>
+                        <tbody>
+                          <tr>
+                            <td style={{ color: '#64748b', paddingBottom: '3px', paddingRight: '8px' }}>Latitude</td>
+                            <td style={{ fontWeight: 700, fontFamily: 'monospace', color: '#1d4ed8' }}>{log.lat.toFixed(6)}°</td>
+                          </tr>
+                          <tr>
+                            <td style={{ color: '#64748b', paddingBottom: '3px', paddingRight: '8px' }}>Longitude</td>
+                            <td style={{ fontWeight: 700, fontFamily: 'monospace', color: '#1d4ed8' }}>{log.lng.toFixed(6)}°</td>
+                          </tr>
+                          <tr>
+                            <td style={{ color: '#64748b', paddingBottom: '3px', paddingRight: '8px' }}>Time</td>
+                            <td style={{ fontWeight: 600 }}>
+                              {new Date(log.recordedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td style={{ color: '#64748b', paddingBottom: '3px', paddingRight: '8px' }}>Accuracy</td>
+                            <td style={{ fontWeight: 600 }}>±{log.accuracy != null ? `${Math.round(log.accuracy)} m` : 'N/A'}</td>
+                          </tr>
+                          <tr>
+                            <td style={{ color: '#64748b', paddingRight: '8px' }}>Speed</td>
+                            <td style={{ fontWeight: 600 }}>{log.speed != null ? `${log.speed.toFixed(1)} km/h` : 'N/A'}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      <a
+                        href={`https://www.google.com/maps?q=${log.lat},${log.lng}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ display: 'block', marginTop: '6px', textAlign: 'center', fontSize: '11px', color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}
+                      >
+                        🗺 Open in Google Maps ↗
+                      </a>
                     </div>
                   </Popup>
                 </CircleMarker>
@@ -525,8 +704,9 @@ const LiveMap: React.FC = () => {
                 type="date"
                 value={selectedDate}
                 onChange={(e) => {
-                  setSelectedDate(e.target.value);
-                  if (activeEmployee) fetchRouteHistory(activeEmployee.id);
+                  const newDate = e.target.value;
+                  setSelectedDate(newDate);
+                  if (activeEmployee) fetchRouteHistory(activeEmployee.id, newDate);
                 }}
                 style={{
                   background: 'rgba(0, 0, 0, 0.4)',

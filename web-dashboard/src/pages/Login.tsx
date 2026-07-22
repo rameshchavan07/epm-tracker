@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, Lock, Mail, ArrowRight } from 'lucide-react';
+import { MapPin, Lock, User, ArrowRight } from 'lucide-react';
 
 import apiClient from '../api/client';
 
@@ -40,15 +40,15 @@ const Login: React.FC = () => {
 
         <form onSubmit={handleLogin} className="login-form">
           <div className="form-group">
-            <label>Email</label>
+            <label>Username</label>
             <div className="input-wrapper">
-              <Mail className="input-icon" />
+              <User className="input-icon" />
               <input 
                 type="email" 
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="input-field" 
-                placeholder="admin@company.com"
+                placeholder="Enter your username (email)"
                 required
               />
             </div>

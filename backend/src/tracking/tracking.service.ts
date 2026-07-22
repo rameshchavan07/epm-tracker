@@ -1,4 +1,5 @@
-import { Injectable, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Inject, forwardRef, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateLocationLogDto } from './dto/create-location-log.dto';
 import { TrackingGateway } from './tracking.gateway';
@@ -18,6 +19,8 @@ interface LatestLocationRaw {
 
 @Injectable()
 export class TrackingService {
+  private readonly logger = new Logger(TrackingService.name);
+
   constructor(
     private prisma: PrismaService,
     @Inject(forwardRef(() => TrackingGateway))
@@ -39,6 +42,7 @@ export class TrackingService {
     const data = locations.map((loc) => ({
       userId: loc.userId,
       companyId: defaultCompany.id,
+      deviceId: loc.deviceId,
       latitude: loc.latitude,
       longitude: loc.longitude,
       accuracy: loc.accuracy,
@@ -51,11 +55,25 @@ export class TrackingService {
         skipDuplicates: true,
       });
 
-      const userIds = Array.from(new Set(locations.map((l) => l.userId)));
-      await this.prisma.user.updateMany({
-        where: { id: { in: userIds } },
-        data: { status: true },
-      });
+      const userUpdates = locations.reduce((acc, loc) => {
+        if (!acc[loc.userId] || acc[loc.userId].timestamp < loc.timestamp) {
+          acc[loc.userId] = loc;
+        }
+        return acc;
+      }, {} as Record<string, CreateLocationLogDto>);
+
+      for (const [userId, loc] of Object.entries(userUpdates)) {
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: {
+            status: true,
+            deviceId: loc.deviceId,
+            lastLatitude: loc.latitude,
+            lastLongitude: loc.longitude,
+            lastLocationAt: new Date(loc.timestamp),
+          },
+        });
+      }
 
       // Broadcast WebSocket live location update to connected dashboard clients
       if (locations.length > 0) {
@@ -85,9 +103,20 @@ export class TrackingService {
     return this.processBatch([location]);
   }
 
-  async getLocationHistory(userId: string, limit = 100) {
+  async getLocationHistory(userId: string, limit = 100, date?: string) {
+    // Build date range filter if a specific date was requested
+    const dateFilter = date
+      ? {
+          gte: new Date(`${date}T00:00:00.000Z`),
+          lte: new Date(`${date}T23:59:59.999Z`),
+        }
+      : undefined;
+
     const logs = await this.prisma.locationLog.findMany({
-      where: { userId },
+      where: {
+        userId,
+        ...(dateFilter ? { recordedAt: dateFilter } : {}),
+      },
       orderBy: { recordedAt: 'desc' },
       take: limit,
     });
@@ -148,5 +177,46 @@ export class TrackingService {
       totalLogsToday,
       avgBattery: 88,
     };
+  }
+
+  // Runs every 2 minutes — marks users offline if no location received in 5+ minutes
+  @Cron('0 */2 * * * *')
+  async markOfflineUsers() {
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+
+    const staleUsers = await this.prisma.user.findMany({
+      where: {
+        status: true, // currently marked active
+        OR: [
+          { lastLocationAt: { lt: fiveMinutesAgo } }, // last ping was >5 min ago
+          { lastLocationAt: null },                   // never sent a location
+        ],
+      },
+      select: { id: true, name: true, role: true },
+    });
+
+    if (staleUsers.length === 0) return;
+
+    // Bulk-mark them offline in the DB
+    await this.prisma.user.updateMany({
+      where: { id: { in: staleUsers.map((u) => u.id) } },
+      data: { status: false },
+    });
+
+    this.logger.log(
+      `Marked ${staleUsers.length} user(s) offline: ${staleUsers.map((u) => u.name).join(', ')}`,
+    );
+
+    // Push real-time status update to the web dashboard via WebSocket
+    for (const user of staleUsers) {
+      this.trackingGateway.broadcastLocationUpdate({
+        id: user.id,
+        name: user.name,
+        role: user.role,
+        status: 'Offline',
+        lat: null,
+        lng: null,
+      });
+    }
   }
 }

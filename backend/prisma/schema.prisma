@@ -23,8 +23,12 @@ model User {
   role         String   @default("EMPLOYEE")
   name         String
   email        String   @unique
-  phone        String?
   passwordHash String
+  deviceId     String?
+  shortId      String?  @unique
+  lastLatitude Float?
+  lastLongitude Float?
+  lastLocationAt DateTime?
   status       Boolean  @default(true)
   createdAt    DateTime @default(now())
 
@@ -36,13 +40,12 @@ model LocationLog {
   id           String   @id @default(uuid())
   companyId    String
   userId       String
+  deviceId     String?
   latitude     Float
   longitude    Float
   accuracy     Float
   speed        Float?
-  heading      Float?
   batteryLevel Int?
-  activityType String?
   recordedAt   DateTime
 
   user User @relation(fields: [userId], references: [id])

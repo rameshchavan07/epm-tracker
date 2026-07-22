@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserPlus, Search, Edit, Trash2, Download, Navigation } from 'lucide-react';
+import { UserPlus, Search, Edit, Trash2, Download, Navigation, X } from 'lucide-react';
 import apiClient from '../api/client';
 
 import AddEmployeeModal from '../components/AddEmployeeModal';
@@ -12,6 +12,9 @@ interface Employee {
   email: string;
   phone?: string;
   status?: string;
+  shortId?: string;
+  deviceId?: string;
+  createdAt?: string;
 }
 
 const Employees: React.FC = () => {
@@ -19,6 +22,7 @@ const Employees: React.FC = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
 
   useEffect(() => {
     const fetchEmployees = async () => {
@@ -84,6 +88,44 @@ const Employees: React.FC = () => {
         />
       )}
 
+      {selectedEmployee && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in p-4">
+          <div className="glass-panel max-w-md w-full p-6 relative">
+            <button 
+              onClick={() => setSelectedEmployee(null)}
+              className="absolute top-4 right-4 text-secondary hover:text-white"
+            >
+              <X size={20} />
+            </button>
+            <h2 className="text-xl font-bold mb-4">{selectedEmployee.name} Details</h2>
+            <div className="space-y-4">
+              <div className="bg-white/5 p-4 rounded-lg">
+                <p className="text-sm text-secondary mb-1">Mobile Login ID</p>
+                <p className="font-mono text-2xl text-blue-400">{selectedEmployee.shortId || 'Not registered'}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-secondary">Email</p>
+                  <p className="text-white truncate" title={selectedEmployee.email}>{selectedEmployee.email}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-secondary">Role</p>
+                  <p className="text-white">{selectedEmployee.role}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-secondary">Status</p>
+                  <p className="text-white">{selectedEmployee.status || 'Offline'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-secondary">Device Info</p>
+                  <p className="text-white truncate" title={selectedEmployee.deviceId || 'Unknown'}>{selectedEmployee.deviceId || 'Unknown'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="table-card glass-panel mt-6">
         <div className="table-toolbar">
           <div className="search-bar">
@@ -98,8 +140,8 @@ const Employees: React.FC = () => {
               <tr>
                 <th>Name</th>
                 <th>Role</th>
+                <th>App ID</th>
                 <th>Email</th>
-                <th>Phone</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -119,8 +161,19 @@ const Employees: React.FC = () => {
                     <div className="font-medium text-white">{emp.name}</div>
                   </td>
                   <td>{emp.role}</td>
-                  <td className="text-secondary">{emp.email}</td>
-                  <td className="text-secondary">{emp.phone || 'N/A'}</td>
+                  <td>
+                    {emp.shortId ? (
+                      <button 
+                        className="text-blue-400 hover:underline font-mono"
+                        onClick={() => setSelectedEmployee(emp)}
+                      >
+                        {emp.shortId}
+                      </button>
+                    ) : (
+                      <span className="text-secondary text-sm">None</span>
+                    )}
+                  </td>
+                  <td className="text-secondary truncate max-w-[150px]" title={emp.email}>{emp.email}</td>
                   <td>
                     <span className={`status-badge ${emp.status === 'Active' ? 'active' : 'offline'}`}>
                       {emp.status || 'Offline'}

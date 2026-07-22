@@ -57,7 +57,7 @@ class LocationService : Service() {
             startLocationUpdates()
         } else if (intent?.action == ACTION_STOP) {
             stopLocationUpdates()
-            stopForeground(true)
+            stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
         }
         return START_STICKY

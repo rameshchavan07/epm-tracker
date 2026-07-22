@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.*
@@ -15,32 +14,59 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.epm.tracking.data.ApiClient
 import com.epm.tracking.data.LoginRequest
 import com.epm.tracking.data.SessionManager
 import kotlinx.coroutines.launch
+import android.provider.Settings
+import androidx.compose.ui.platform.LocalContext
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+import android.Manifest
+import kotlinx.coroutines.tasks.await
+import com.google.android.gms.location.LocationServices
 
 @Composable
 fun LoginScreen(
     sessionManager: SessionManager,
     onLoginSuccess: () -> Unit
 ) {
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
+    var userId by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        val existingShortId = sessionManager.getShortId()
+        if (existingShortId != null) {
+            userId = existingShortId
+        } else {
+            isLoading = true
+            try {
+                val apiService = ApiClient.getService(sessionManager)
+                val user = apiService.registerDevice()
+                user.shortId?.let { newShortId ->
+                    sessionManager.saveShortId(newShortId)
+                    userId = newShortId
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                error = "Failed to fetch a new User ID. Please check connection."
+            } finally {
+                isLoading = false
+            }
+        }
+    }
 
     // Deep space gradient background
     val gradientBackground = Brush.verticalGradient(
         colors = listOf(
             Color(0xFF0F172A), // Deep Slate
             Color(0xFF1E1B4B), // Indigo Dark
-            Color(0xFF020617)  # Almost Black
+            Color(0xFF020617)  // Almost Black
         )
     )
 
@@ -105,36 +131,13 @@ fun LoginScreen(
 
                 // Input Fields
                 OutlinedTextField(
-                    value = email,
-                    onValueChange = { email = it },
-                    label = { Text("Work Email") },
-                    leadingIcon = {
-                        Icon(Icons.Default.Email, contentDescription = null, tint = Color(0xFF94A3B8))
-                    },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF3B82F6),
-                        unfocusedBorderColor = Color(0xFF334155),
-                        focusedLabelColor = Color(0xFF60A5FA),
-                        unfocusedLabelColor = Color(0xFF94A3B8),
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 16.dp)
-                )
-
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    label = { Text("Password") },
+                    value = userId,
+                    onValueChange = { userId = it },
+                    label = { Text("User ID") },
                     leadingIcon = {
                         Icon(Icons.Default.Lock, contentDescription = null, tint = Color(0xFF94A3B8))
                     },
                     singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Color(0xFF3B82F6),
                         unfocusedBorderColor = Color(0xFF334155),
@@ -174,15 +177,29 @@ fun LoginScreen(
                         coroutineScope.launch {
                             try {
                                 val apiService = ApiClient.getService(sessionManager)
-                                val response = apiService.login(LoginRequest(email, password))
+                                val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown_device"
+                                
+                                var lat = 0.0
+                                var lng = 0.0
+                                
+                                if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                                    val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+                                    val location = fusedLocationClient.lastLocation.await()
+                                    if (location != null) {
+                                        lat = location.latitude
+                                        lng = location.longitude
+                                    }
+                                }
+
+                                val response = apiService.login(LoginRequest(userId, deviceId, lat, lng))
                                 sessionManager.saveAuthToken(response.access_token)
-                                response.user?.id?.let { userId ->
-                                    sessionManager.saveUserId(userId)
+                                response.user?.id?.let { loggedInUserId ->
+                                    sessionManager.saveUserId(loggedInUserId)
                                 }
                                 onLoginSuccess()
                             } catch (e: Exception) {
                                 e.printStackTrace()
-                                error = "Login failed. Check server connection or credentials."
+                                error = "Login failed. Check server connection or User ID."
                             } finally {
                                 isLoading = false
                             }

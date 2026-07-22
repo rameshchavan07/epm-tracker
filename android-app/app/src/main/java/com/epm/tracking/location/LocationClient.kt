@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.callbackFlow
 
 interface LocationClient {
     fun getLocationUpdates(interval: Long): Flow<Location>
-    class LocationException(message: String): Exception()
+    class LocationException(message: String): Exception(message)
 }
 
 class DefaultLocationClient(

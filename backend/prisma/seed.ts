@@ -89,7 +89,6 @@ async function main() {
         accuracy: 10.0,
         speed: 15.5,
         batteryLevel: Math.floor(Math.random() * 40) + 60,
-        activityType: 'IN_VEHICLE',
         recordedAt: new Date(),
       },
     });
