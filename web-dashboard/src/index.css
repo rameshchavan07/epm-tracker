@@ -547,8 +547,11 @@ body {
   .dashboard-sidebar.closed {
     display: none;
   }
-  .mobile-toggle-btn {
+  .mobile-toggle-btn.sidebar-open {
     left: 366px; /* Place it right outside the sidebar */
+  }
+  .mobile-toggle-btn.sidebar-closed {
+    left: 16px; /* Place it top left when sidebar is closed */
   }
 }
 /* Modal Styles */

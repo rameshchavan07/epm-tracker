@@ -146,7 +146,10 @@ export class TrackingService {
       }
     }
 
-    return { success: true, count: processedCount };
+    return { 
+      success: processedCount > 0 || locations.length === 0, 
+      count: processedCount 
+    };
   }
 
   async processSingle(location: CreateLocationLogDto) {
@@ -276,5 +279,29 @@ export class TrackingService {
         lng: null,
       });
     }
+  }
+
+  async markOfflineExplicit(deviceId: string) {
+    if (!deviceId) return;
+    const device = await this.prisma.mobileUser.findUnique({
+      where: { deviceId },
+      select: { id: true, deviceId: true, userId: true },
+    });
+
+    if (!device) return;
+
+    await this.prisma.mobileUser.update({
+      where: { id: device.id },
+      data: { status: false },
+    });
+
+    this.trackingGateway.broadcastLocationUpdate({
+      id: device.id,
+      deviceId: device.deviceId,
+      name: device.userId || device.deviceId,
+      status: 'Offline',
+      lat: null,
+      lng: null,
+    });
   }
 }

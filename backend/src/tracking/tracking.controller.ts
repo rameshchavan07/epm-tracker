@@ -23,6 +23,12 @@ export class TrackingController {
     return this.trackingService.processSingle(location);
   }
 
+  @Post('offline')
+  @HttpCode(HttpStatus.OK)
+  async markOffline(@Body() body: { deviceId: string }) {
+    return this.trackingService.markOfflineExplicit(body.deviceId);
+  }
+
   @Post('location/batch')
   @HttpCode(HttpStatus.OK)
   async syncBatch(@Body() locations: CreateLocationLogDto[]) {

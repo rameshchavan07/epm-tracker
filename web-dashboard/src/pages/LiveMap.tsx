@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import apiClient from '../api/client';
 import {
   MapContainer,
   TileLayer,
@@ -14,7 +15,6 @@ import {
   Users,
   X,
   Navigation,
-  UserPlus,
   History,
   Play,
   Pause,
@@ -24,7 +24,6 @@ import {
   Compass,
 } from 'lucide-react';
 import L from 'leaflet';
-import AddEmployeeModal from '../components/AddEmployeeModal';
 import { calculateRouteMetrics } from '../utils/travelMetrics';
 
 // Fix for default marker icons in react-leaflet
@@ -39,12 +38,14 @@ L.Icon.Default.mergeOptions({
 });
 
 // Component to dynamically change map center
-const ChangeView: React.FC<{ center: [number, number]; zoom: number }> = ({
+const ChangeView: React.FC<{ center: [number, number]; zoom?: number }> = ({
   center,
   zoom,
 }) => {
   const map = useMap();
-  map.setView(center, zoom);
+  useEffect(() => {
+    map.setView(center, zoom ?? map.getZoom());
+  }, [center, map, zoom]);
   return null;
 };
 
@@ -82,9 +83,9 @@ const LiveMap: React.FC = () => {
 
   // UI State
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Map State
+  const [mapStyle, setMapStyle] = useState<'osm' | 'street' | 'satellite'>('osm');
   const [mapCenter, setMapCenter] = useState<[number, number]>([
     20.5937, 78.9629,
   ]); // Default to center of India
@@ -101,7 +102,6 @@ const LiveMap: React.FC = () => {
   useEffect(() => {
     const fetchLocations = async () => {
       try {
-        const { default: apiClient } = await import('../api/client');
         const response = await apiClient.get('/tracking/latest');
         if (response.data && response.data.length > 0) {
           setEmployees(response.data);
@@ -195,7 +195,6 @@ const LiveMap: React.FC = () => {
   // Fetch route history when toggling or changing active employee
   const fetchRouteHistory = async (userId: string, date?: string) => {
     try {
-      const { default: apiClient } = await import('../api/client');
       // Pass the date filter so only that day's records come back
       const params = date ? `?date=${date}&limit=500` : '?limit=500';
       const response = await apiClient.get(`/tracking/history/${userId}${params}`);
@@ -264,25 +263,6 @@ const LiveMap: React.FC = () => {
     }
   };
 
-  const handleAddEmployee = (empData: {
-    name: string;
-    lat: number;
-    lng: number;
-  }) => {
-    const newEmp = {
-      id: Date.now().toString(),
-      name: empData.name,
-      role: 'New Employee',
-      lat: empData.lat,
-      lng: empData.lng,
-      status: 'Active',
-      battery: 100,
-    };
-    setEmployees([...employees, newEmp]);
-    setActiveEmployee(newEmp);
-    setMapCenter([empData.lat, empData.lng]);
-  };
-
   const historyPositions: [number, number][] = historyLogs
     .slice(0, playbackStep + 1)
     .map((log) => [log.lat, log.lng]);
@@ -293,7 +273,7 @@ const LiveMap: React.FC = () => {
     <div className="dashboard-container" style={{ position: 'relative' }}>
       {/* Mobile Toggle Button */}
       <button
-        className="mobile-toggle-btn map-controls-toggle"
+        className={`mobile-toggle-btn map-controls-toggle ${isSidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}
         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
         title="Toggle Map Controls"
       >
@@ -336,14 +316,6 @@ const LiveMap: React.FC = () => {
             <h3 style={{ margin: 0 }}>
               <Users className="inline-icon" /> Track Team
             </h3>
-            <button
-              className="btn-primary"
-              style={{ padding: '6px 12px', fontSize: '12px', width: 'auto' }}
-              onClick={() => setIsModalOpen(true)}
-            >
-              <UserPlus className="inline-icon" style={{ marginRight: '4px' }} />{' '}
-              Add
-            </button>
           </div>
 
           {/* Toggle Route History View */}
@@ -460,14 +432,55 @@ const LiveMap: React.FC = () => {
       </aside>
 
       {/* Main Map Area */}
-      <main className="dashboard-main">
+      <main className="dashboard-main" style={{ position: 'relative' }}>
+        
+        {/* Map Style Selector */}
+        <div style={{ position: 'absolute', top: '16px', right: '16px', zIndex: 1000, display: 'flex', gap: '4px', background: 'white', padding: '4px', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+          <button 
+            onClick={() => setMapStyle('osm')} 
+            style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', background: mapStyle === 'osm' ? '#eff6ff' : 'transparent', color: mapStyle === 'osm' ? '#2563eb' : '#64748b', cursor: 'pointer', fontWeight: 600, fontSize: '12px', transition: 'all 0.2s' }}
+          >
+            OSM
+          </button>
+          <button 
+            onClick={() => setMapStyle('street')} 
+            style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', background: mapStyle === 'street' ? '#eff6ff' : 'transparent', color: mapStyle === 'street' ? '#2563eb' : '#64748b', cursor: 'pointer', fontWeight: 600, fontSize: '12px', transition: 'all 0.2s' }}
+          >
+            Street
+          </button>
+          <button 
+            onClick={() => setMapStyle('satellite')} 
+            style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', background: mapStyle === 'satellite' ? '#eff6ff' : 'transparent', color: mapStyle === 'satellite' ? '#2563eb' : '#64748b', cursor: 'pointer', fontWeight: 600, fontSize: '12px', transition: 'all 0.2s' }}
+          >
+            Satellite
+          </button>
+        </div>
+
         <MapContainer center={mapCenter} zoom={13} className="map-container">
-          <ChangeView center={mapCenter} zoom={13} />
+          <ChangeView center={mapCenter} />
           <ResizeMap isSidebarOpen={isSidebarOpen} />
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          />
+          
+          {mapStyle === 'osm' && (
+            <TileLayer
+              key="osm"
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            />
+          )}
+          {mapStyle === 'street' && (
+            <TileLayer
+              key="street"
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
+              attribution='Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom, 2012'
+            />
+          )}
+          {mapStyle === 'satellite' && (
+            <TileLayer
+              key="satellite"
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+            />
+          )}
 
           {userLocation && (
             <Marker position={userLocation}>
@@ -662,7 +675,7 @@ const LiveMap: React.FC = () => {
               color: '#fff',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
               <Compass className="text-blue-400" size={20} />
               <div>
                 <div style={{ fontSize: '11px', color: '#94a3b8' }}>Total Distance</div>
@@ -674,7 +687,7 @@ const LiveMap: React.FC = () => {
 
             <div style={{ height: '24px', width: '1px', background: 'rgba(255,255,255,0.1)' }}></div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
               <Clock className="text-purple-400" size={20} />
               <div>
                 <div style={{ fontSize: '11px', color: '#94a3b8' }}>Travel Duration</div>
@@ -686,7 +699,7 @@ const LiveMap: React.FC = () => {
 
             <div style={{ height: '24px', width: '1px', background: 'rgba(255,255,255,0.1)' }}></div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
               <Navigation className="text-emerald-400" size={20} />
               <div>
                 <div style={{ fontSize: '11px', color: '#94a3b8' }}>Visited Locations</div>
@@ -814,14 +827,6 @@ const LiveMap: React.FC = () => {
           </div>
         )}
       </main>
-
-      {/* Add Employee Modal */}
-      {isModalOpen && (
-        <AddEmployeeModal
-          onClose={() => setIsModalOpen(false)}
-          onAdd={handleAddEmployee}
-        />
-      )}
     </div>
   );
 };

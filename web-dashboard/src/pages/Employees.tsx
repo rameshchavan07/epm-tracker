@@ -17,6 +17,14 @@ interface MobileDevice {
   };
 }
 
+interface LocationHistoryItem {
+  id: string;
+  lat: number;
+  lng: number;
+  recordedAt: string;
+  accuracy?: number;
+}
+
 const Employees: React.FC = () => {
   const navigate = useNavigate();
   const [devices, setDevices] = useState<MobileDevice[]>([]);
@@ -25,6 +33,11 @@ const Employees: React.FC = () => {
   const [selectedDevice, setSelectedDevice] = useState<MobileDevice | null>(null);
   const [editingDevice, setEditingDevice] = useState<MobileDevice | null>(null);
   const [editUserId, setEditUserId] = useState('');
+
+  // Location History State
+  const [historyModalUser, setHistoryModalUser] = useState<MobileDevice | null>(null);
+  const [historyLogs, setHistoryLogs] = useState<LocationHistoryItem[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   const fetchDevices = async () => {
     try {
@@ -84,6 +97,23 @@ const Employees: React.FC = () => {
     }
   };
 
+  const handleOpenHistory = async (device: MobileDevice) => {
+    setHistoryModalUser(device);
+    setLoadingHistory(true);
+    setHistoryLogs([]);
+    try {
+      // Use limit to fetch most recent 100 location logs
+      const response = await apiClient.get(`/tracking/history/${device.id}?limit=100`);
+      if (response.data && Array.isArray(response.data)) {
+        setHistoryLogs(response.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch location history', err);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
   const filteredDevices = devices.filter(dev => {
     const query = searchQuery.toLowerCase();
     return (
@@ -108,32 +138,34 @@ const Employees: React.FC = () => {
 
       {/* Device Details Modal */}
       {selectedDevice && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in p-4">
-          <div className="glass-panel max-w-md w-full p-6 relative">
+        <div className="modal-overlay">
+          <div className="modal-content">
             <button
               onClick={() => setSelectedDevice(null)}
-              className="absolute top-4 right-4 text-secondary hover:text-white"
+              className="modal-close"
             >
               <X size={20} />
             </button>
-            <h2 className="text-xl font-bold mb-4">Device Info</h2>
-            <div className="space-y-4">
-              <div className="bg-white/5 p-4 rounded-lg">
-                <p className="text-sm text-secondary mb-1">Android Hardware ID (`ANDROID_ID`)</p>
-                <p className="font-mono text-lg text-blue-400 break-all">{selectedDevice.deviceId}</p>
+            <div className="modal-header">
+              <h2 style={{ marginBottom: '16px' }}>Device Info</h2>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '8px' }}>
+                <p className="text-secondary" style={{ fontSize: '14px', marginBottom: '4px' }}>Android Hardware ID (`ANDROID_ID`)</p>
+                <p style={{ fontFamily: 'monospace', fontSize: '18px', color: '#60a5fa', wordBreak: 'break-all' }}>{selectedDevice.deviceId}</p>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div>
-                  <p className="text-sm text-secondary">User ID</p>
-                  <p className="text-white font-mono font-medium">{selectedDevice.userId}</p>
+                  <p className="text-secondary" style={{ fontSize: '14px' }}>User ID</p>
+                  <p style={{ color: '#fff', fontFamily: 'monospace', fontWeight: 500 }}>{selectedDevice.userId}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-secondary">Status</p>
-                  <p className="text-white">{selectedDevice.status ? 'Active' : 'Offline'}</p>
+                  <p className="text-secondary" style={{ fontSize: '14px' }}>Status</p>
+                  <p style={{ color: '#fff' }}>{selectedDevice.status ? 'Active' : 'Offline'}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-secondary">Total Location Logs</p>
-                  <p className="text-white">{selectedDevice._count?.locationLogs ?? 0}</p>
+                  <p className="text-secondary" style={{ fontSize: '14px' }}>Total Location Logs</p>
+                  <p style={{ color: '#fff' }}>{selectedDevice._count?.locationLogs ?? 0}</p>
                 </div>
               </div>
             </div>
@@ -143,27 +175,30 @@ const Employees: React.FC = () => {
 
       {/* Edit User ID Modal */}
       {editingDevice && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in p-4">
-          <div className="glass-panel max-w-md w-full p-6 relative">
+        <div className="modal-overlay">
+          <div className="modal-content">
             <button
               onClick={() => setEditingDevice(null)}
-              className="absolute top-4 right-4 text-secondary hover:text-white"
+              className="modal-close"
             >
               <X size={20} />
             </button>
-            <h2 className="text-xl font-bold mb-4">Edit User ID</h2>
-            <div className="space-y-4">
+            <div className="modal-header">
+              <h2 style={{ marginBottom: '16px' }}>Edit User ID</h2>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div>
-                <label className="block text-sm text-secondary mb-1">Custom User ID</label>
+                <label className="text-secondary" style={{ display: 'block', fontSize: '14px', marginBottom: '8px' }}>Custom User ID</label>
                 <input
                   type="text"
                   value={editUserId}
                   onChange={(e) => setEditUserId(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500 font-mono"
+                  className="input-field"
+                  style={{ fontFamily: 'monospace' }}
                   placeholder="e.g. USR-1001"
                 />
               </div>
-              <div className="flex justify-end gap-3 pt-2">
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
                 <button className="btn-secondary" style={{ width: 'auto' }} onClick={() => setEditingDevice(null)}>
                   Cancel
                 </button>
@@ -171,6 +206,59 @@ const Employees: React.FC = () => {
                   <Check size={16} className="inline mr-1" /> Save User ID
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Location History Modal */}
+      {historyModalUser && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '800px', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+            <button
+              onClick={() => setHistoryModalUser(null)}
+              className="modal-close"
+            >
+              <X size={20} />
+            </button>
+            <div className="modal-header" style={{ marginBottom: '16px' }}>
+              <h2 style={{ marginBottom: '8px' }}>Location History</h2>
+              <p className="text-secondary" style={{ fontSize: '14px', margin: 0 }}>
+                Showing recent location pings for <span style={{ fontFamily: 'monospace', color: '#fff' }}>{historyModalUser.userId}</span>
+              </p>
+            </div>
+            
+            <div style={{ flex: 1, overflowY: 'auto', paddingRight: '8px' }}>
+              {loadingHistory ? (
+                <div className="flex-center" style={{ padding: '48px 0', color: 'var(--text-secondary)' }}>Loading history...</div>
+              ) : historyLogs.length === 0 ? (
+                <div className="flex-center" style={{ padding: '48px 0', color: 'var(--text-secondary)' }}>No location history found for this user.</div>
+              ) : (
+                <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-secondary)', fontSize: '14px' }}>
+                      <th style={{ paddingBottom: '12px', fontWeight: 600 }}>Date & Time</th>
+                      <th style={{ paddingBottom: '12px', fontWeight: 600 }}>Latitude</th>
+                      <th style={{ paddingBottom: '12px', fontWeight: 600 }}>Longitude</th>
+                      <th style={{ paddingBottom: '12px', fontWeight: 600 }}>Accuracy</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyLogs.map(log => (
+                      <tr key={log.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', transition: 'background 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                        <td style={{ padding: '14px 0', fontSize: '14px', color: '#fff' }}>
+                          {new Date(log.recordedAt).toLocaleString()}
+                        </td>
+                        <td style={{ padding: '14px 0', fontSize: '14px', fontFamily: 'monospace', color: '#60a5fa' }}>{log.lat.toFixed(6)}</td>
+                        <td style={{ padding: '14px 0', fontSize: '14px', fontFamily: 'monospace', color: '#60a5fa' }}>{log.lng.toFixed(6)}</td>
+                        <td style={{ padding: '14px 0', fontSize: '14px', color: 'var(--text-secondary)' }}>
+                          {log.accuracy ? `±${Math.round(log.accuracy)}m` : '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         </div>
@@ -215,13 +303,21 @@ const Employees: React.FC = () => {
                   <td>
                     <div className="flex items-center gap-2">
                       <Smartphone size={16} className="text-blue-400" />
-                      <span className="font-mono font-medium text-white">{dev.userId}</span>
+                      <button
+                        className="font-mono font-medium text-white hover:text-blue-400 hover:underline text-left transition-colors"
+                        onClick={() => handleOpenHistory(dev)}
+                        title="View Location History"
+                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}
+                      >
+                        {dev.userId}
+                      </button>
                     </div>
                   </td>
                   <td>
                     <button
-                      className="text-blue-400 hover:underline font-mono text-xs"
+                      className="text-blue-400 hover:underline font-mono text-xs text-left"
                       onClick={() => setSelectedDevice(dev)}
+                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}
                     >
                       {dev.deviceId}
                     </button>

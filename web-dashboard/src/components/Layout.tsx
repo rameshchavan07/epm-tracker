@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { BarChart3, Map as MapIcon, Users, Settings, LogOut, Menu, X, Hexagon } from 'lucide-react';
+import { BarChart3, Map as MapIcon, Users, Settings, LogOut, Menu, X } from 'lucide-react';
 
 const Layout: React.FC = () => {
   const navigate = useNavigate();
@@ -33,10 +33,10 @@ const Layout: React.FC = () => {
       {/* Global Sidebar */}
       <aside className={`global-sidebar ${isSidebarOpen ? 'open' : 'closed'}`}>
         <div className="sidebar-brand">
-          <div className="brand-logo flex-center">
-            <Hexagon className="text-blue-500 w-8 h-8" />
+          <div className="brand-logo flex-center" style={{ padding: '0', background: 'transparent', boxShadow: 'none' }}>
+            <img src="/logo.png" alt="EPM Logo" style={{ width: '40px', height: '40px', borderRadius: '8px' }} />
           </div>
-          <h2>EPM Suite</h2>
+          <h2>EPM Tracker</h2>
         </div>
 
         <nav className="sidebar-nav">

@@ -10,6 +10,7 @@ import {
   Server,
   Clock,
 } from 'lucide-react';
+import apiClient from '../api/client';
 
 interface CompanyProfile {
   id: string;
@@ -32,7 +33,6 @@ const CompanySettings: React.FC = () => {
   useEffect(() => {
     const fetchCompanyProfile = async () => {
       try {
-        const { default: apiClient } = await import('../api/client');
         const response = await apiClient.get('/company/profile');
         if (response.data) {
           setCompany(response.data);
@@ -57,7 +57,6 @@ const CompanySettings: React.FC = () => {
     setMessage(null);
 
     try {
-      const { default: apiClient } = await import('../api/client');
       const response = await apiClient.patch('/company/profile', {
         name,
         subscriptionPlan,

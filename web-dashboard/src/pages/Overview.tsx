@@ -139,7 +139,6 @@ const Overview: React.FC = () => {
               <thead>
                 <tr>
                   <th>Employee</th>
-                  <th>Role</th>
                   <th>Coordinates</th>
                   <th>Status</th>
                   <th>Last Seen</th>
@@ -156,7 +155,6 @@ const Overview: React.FC = () => {
                       onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                     >
                       <td className="font-medium">{log.name}</td>
-                      <td className="text-secondary">{log.role}</td>
                       <td className="text-secondary text-sm">
                         {log.lat.toFixed(4)}, {log.lng.toFixed(4)}
                       </td>
@@ -170,7 +168,7 @@ const Overview: React.FC = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
+                    <td colSpan={4} style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
                       No recent location activity found.
                     </td>
                   </tr>

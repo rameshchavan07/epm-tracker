@@ -43,7 +43,11 @@ data class LocationBatchRequest(
 
 data class SyncResponse(val success: Boolean, val count: Int)
 
+data class OfflineRequest(val deviceId: String)
+
 interface ApiService {
+    @GET("api/v1")
+    suspend fun checkHealth(): retrofit2.Response<okhttp3.ResponseBody>
     @GET("api/v1/tracking/config")
     suspend fun getTrackingConfig(): TrackingConfigResponse
 
@@ -55,4 +59,7 @@ interface ApiService {
 
     @POST("api/v1/tracking/location/batch")
     suspend fun syncLocations(@Body locations: List<LocationBatchRequest>): SyncResponse
+
+    @POST("api/v1/tracking/offline")
+    suspend fun markOffline(@Body request: OfflineRequest): retrofit2.Response<okhttp3.ResponseBody>
 }

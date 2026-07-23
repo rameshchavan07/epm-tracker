@@ -24,6 +24,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 
 class TrackingService : Service() {
@@ -119,25 +120,26 @@ class TrackingService : Service() {
                     // 2. Immediately try to push to the backend server
                     serviceScope.launch {
                         try {
-                            val apiService = ApiClient.getService()
-                            val response = apiService.syncLocations(
-                                listOf(
-                                    LocationBatchRequest(
-                                        deviceId     = deviceId,
-                                        mobileUserId = userId,
-                                        latitude     = lat,
-                                        longitude    = lng,
-                                        accuracy  = accuracy,
-                                        timestamp = timestamp
-                                    )
+                            val unsynced = db.locationDao().getUnsyncedLocations()
+                            if (unsynced.isEmpty()) return@launch
+
+                            val batchRequest = unsynced.map { loc ->
+                                LocationBatchRequest(
+                                    deviceId     = loc.deviceId.ifEmpty { deviceId },
+                                    mobileUserId = loc.userId,
+                                    latitude     = loc.latitude,
+                                    longitude    = loc.longitude,
+                                    accuracy     = loc.accuracy,
+                                    timestamp    = loc.timestamp
                                 )
-                            )
-                            // If server accepted it, mark the latest row as synced
+                            }
+
+                            val apiService = ApiClient.getService()
+                            val response = apiService.syncLocations(batchRequest)
+                            
+                            // If server accepted it, delete only the ones we just sent
                             if (response.success) {
-                                val unsynced = db.locationDao().getUnsyncedLocations()
-                                if (unsynced.isNotEmpty()) {
-                                    db.locationDao().deleteLocations(unsynced.map { it.id })
-                                }
+                                db.locationDao().deleteLocations(unsynced.map { it.id })
                             }
                         } catch (e: Exception) {
                             // Network unavailable — SyncWorker will retry later
@@ -154,6 +156,18 @@ class TrackingService : Service() {
     }
 
     private fun stop() {
+        val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
+        
+        // Use GlobalScope for a quick fire-and-forget network call that survives service destruction
+        @Suppress("OPT_IN_USAGE")
+        GlobalScope.launch(Dispatchers.IO) {
+            try {
+                ApiClient.getService().markOffline(com.epm.tracking.data.OfflineRequest(deviceId))
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }

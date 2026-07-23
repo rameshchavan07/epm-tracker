@@ -25,6 +25,8 @@ import androidx.compose.ui.platform.LocalContext
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import android.Manifest
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import kotlinx.coroutines.tasks.await
 import com.google.android.gms.location.LocationServices
 
@@ -36,10 +38,11 @@ fun LoginScreen(
     var userId by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    val snackbarHostState = remember { SnackbarHostState() }
+    var isVisible by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
+        isVisible = true
         val existingUserId = sessionManager.getUserId()
         
         if (existingUserId == null) {
@@ -60,13 +63,25 @@ fun LoginScreen(
         onLoginSuccess()
     }
 
+    val infiniteTransition = rememberInfiniteTransition()
+    val gradientOffset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1500f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(15000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        )
+    )
+
     // Deep space gradient background
     val gradientBackground = Brush.verticalGradient(
         colors = listOf(
             Color(0xFF0F172A), // Deep Slate
             Color(0xFF1E1B4B), // Indigo Dark
             Color(0xFF020617)  // Almost Black
-        )
+        ),
+        startY = gradientOffset,
+        endY = gradientOffset + 1500f
     )
 
     Box(
@@ -75,89 +90,94 @@ fun LoginScreen(
             .background(gradientBackground),
         contentAlignment = Alignment.Center
     ) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth(0.9f)
-                .padding(16.dp),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color(0xFF1E293B).copy(alpha = 0.85f)
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 16.dp)
+        AnimatedVisibility(
+            visible = isVisible,
+            enter = fadeIn(animationSpec = tween(800)) + slideInVertically(initialOffsetY = { 60 }, animationSpec = tween(800))
         ) {
-            Column(
+            Card(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(28.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .fillMaxWidth(0.9f)
+                    .padding(16.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFF1E293B).copy(alpha = 0.85f)
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 16.dp)
             ) {
-                // Brand Logo Badge
-                Surface(
+                Column(
                     modifier = Modifier
-                        .size(72.dp)
-                        .padding(bottom = 16.dp),
-                    shape = CircleShape,
-                    color = Color(0xFF3B82F6).copy(alpha = 0.15f),
-                    border = CardDefaults.outlinedCardBorder().copy(
-                        brush = Brush.radialGradient(
-                            listOf(Color(0xFF60A5FA), Color(0xFF3B82F6))
-                        )
-                    )
+                        .fillMaxWidth()
+                        .padding(28.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.LocationOn,
-                            contentDescription = "Logo",
-                            tint = Color(0xFF60A5FA),
-                            modifier = Modifier.size(36.dp)
-                        )
-                    }
-                }
-
-                Text(
-                    text = "EPM Tracker",
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-
-                Text(
-                    text = "Field Operations & Location Portal",
-                    fontSize = 13.sp,
-                    color = Color(0xFF94A3B8),
-                    modifier = Modifier.padding(bottom = 32.dp)
-                )
-
-                // Just show loading spinner while automatically logging in
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        color = Color(0xFF3B82F6),
+                    // Brand Logo Badge
+                    Surface(
                         modifier = Modifier
-                            .padding(top = 16.dp)
-                            .size(32.dp),
-                        strokeWidth = 3.dp
-                    )
-                    Text(
-                        text = "Authenticating device...",
-                        color = Color(0xFF94A3B8),
-                        fontSize = 14.sp,
-                        modifier = Modifier.padding(top = 16.dp)
-                    )
-                } else if (error != null) {
-                    Button(
-                        onClick = {
-                            // Retry logic could be added here, or just force a restart of LaunchedEffect
-                            error = "Please restart the app to try again."
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF2563EB)
+                            .size(72.dp)
+                            .padding(bottom = 16.dp),
+                        shape = CircleShape,
+                        color = Color(0xFF3B82F6).copy(alpha = 0.15f),
+                        border = CardDefaults.outlinedCardBorder().copy(
+                            brush = Brush.radialGradient(
+                                listOf(Color(0xFF60A5FA), Color(0xFF3B82F6))
+                            )
                         )
                     ) {
-                        Text("Retry", color = Color.White)
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = "Logo",
+                                tint = Color(0xFF60A5FA),
+                                modifier = Modifier.size(36.dp)
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "EPM Tracker",
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+
+                    Text(
+                        text = "Field Operations & Location Portal",
+                        fontSize = 13.sp,
+                        color = Color(0xFF94A3B8),
+                        modifier = Modifier.padding(bottom = 32.dp)
+                    )
+
+                    // Just show loading spinner while automatically logging in
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            color = Color(0xFF3B82F6),
+                            modifier = Modifier
+                                .padding(top = 16.dp)
+                                .size(32.dp),
+                            strokeWidth = 3.dp
+                        )
+                        Text(
+                            text = "Authenticating device...",
+                            color = Color(0xFF94A3B8),
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(top = 16.dp)
+                        )
+                    } else if (error != null) {
+                        Button(
+                            onClick = {
+                                // Retry logic could be added here, or just force a restart of LaunchedEffect
+                                error = "Please restart the app to try again."
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF2563EB)
+                            )
+                        ) {
+                            Text("Retry", color = Color.White)
+                        }
                     }
                 }
             }
