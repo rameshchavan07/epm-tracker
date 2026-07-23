@@ -78,7 +78,7 @@ class TrackingService : Service() {
         // Fetch dynamic tracking interval setting from backend on service startup
         serviceScope.launch {
             try {
-                val apiService = ApiClient.getService(sessionManager)
+                val apiService = ApiClient.getService()
                 val config = apiService.getTrackingConfig()
                 if (config.trackingIntervalMs > 0) {
                     sessionManager.saveTrackingInterval(config.trackingIntervalMs)
@@ -119,14 +119,14 @@ class TrackingService : Service() {
                     // 2. Immediately try to push to the backend server
                     serviceScope.launch {
                         try {
-                            val apiService = ApiClient.getService(sessionManager)
+                            val apiService = ApiClient.getService()
                             val response = apiService.syncLocations(
                                 listOf(
                                     LocationBatchRequest(
-                                        deviceId  = deviceId,
-                                        userId    = userId,
-                                        latitude  = lat,
-                                        longitude = lng,
+                                        deviceId     = deviceId,
+                                        mobileUserId = userId,
+                                        latitude     = lat,
+                                        longitude    = lng,
                                         accuracy  = accuracy,
                                         timestamp = timestamp
                                     )

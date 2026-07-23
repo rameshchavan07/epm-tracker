@@ -20,7 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import com.epm.tracking.service.LocationService
+import com.epm.tracking.service.TrackingService
 import kotlinx.coroutines.launch
 
 @Composable
@@ -238,8 +238,8 @@ fun DashboardScreen(
                         }
                     }
 
-                    val intent = Intent(context, LocationService::class.java).apply {
-                        action = if (isTracking) LocationService.ACTION_STOP else LocationService.ACTION_START
+                    val intent = Intent(context, TrackingService::class.java).apply {
+                        action = if (isTracking) TrackingService.ACTION_STOP else TrackingService.ACTION_START
                     }
                     if (isTracking) {
                         context.stopService(intent)

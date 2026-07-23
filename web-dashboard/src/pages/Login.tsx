@@ -43,12 +43,12 @@ const Login: React.FC = () => {
             <label>Username</label>
             <div className="input-wrapper">
               <User className="input-icon" />
-              <input 
-                type="email" 
+              <input
+                type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="input-field" 
-                placeholder="Enter your username (email)"
+                className="input-field"
+                placeholder="Enter your username"
                 required
               />
             </div>
@@ -58,11 +58,11 @@ const Login: React.FC = () => {
             <label>Password</label>
             <div className="input-wrapper">
               <Lock className="input-icon" />
-              <input 
-                type="password" 
+              <input
+                type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="input-field" 
+                className="input-field"
                 placeholder="••••••••"
                 required
               />

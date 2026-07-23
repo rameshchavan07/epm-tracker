@@ -26,11 +26,11 @@ class SyncWorker(
                 return Result.success()
             }
 
-            val apiService = ApiClient.getService(sessionManager)
+            val apiService = ApiClient.getService()
             val batchRequest = unsyncedLocations.map { loc ->
                 LocationBatchRequest(
-                    deviceId  = loc.deviceId.ifEmpty { deviceId },
-                    userId    = loc.userId,
+                    deviceId     = loc.deviceId.ifEmpty { deviceId },
+                    mobileUserId = loc.userId,
                     latitude  = loc.latitude,
                     longitude = loc.longitude,
                     accuracy  = loc.accuracy,

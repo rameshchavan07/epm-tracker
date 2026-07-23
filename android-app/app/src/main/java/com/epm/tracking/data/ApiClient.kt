@@ -13,19 +13,9 @@ object ApiClient {
 
     private var retrofit: Retrofit? = null
 
-    fun getService(sessionManager: SessionManager): ApiService {
+    fun getService(): ApiService {
         if (retrofit == null) {
-            val authInterceptor = Interceptor { chain ->
-                val requestBuilder = chain.request().newBuilder()
-                sessionManager.getAuthToken()?.let { token ->
-                    requestBuilder.addHeader("Authorization", "Bearer $token")
-                }
-                chain.proceed(requestBuilder.build())
-            }
-
-            val client = OkHttpClient.Builder()
-                .addInterceptor(authInterceptor)
-                .build()
+            val client = OkHttpClient.Builder().build()
 
             retrofit = Retrofit.Builder()
                 .baseUrl(BASE_URL)

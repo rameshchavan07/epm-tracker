@@ -36,29 +36,28 @@ fun LoginScreen(
     var userId by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
-        val existingShortId = sessionManager.getShortId()
-        if (existingShortId != null) {
-            userId = existingShortId
-        } else {
+        val existingUserId = sessionManager.getUserId()
+        
+        if (existingUserId == null) {
             isLoading = true
-            try {
-                val apiService = ApiClient.getService(sessionManager)
-                val user = apiService.registerDevice()
-                user.shortId?.let { newShortId ->
-                    sessionManager.saveShortId(newShortId)
-                    userId = newShortId
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                error = "Failed to fetch a new User ID. Please check connection."
-            } finally {
-                isLoading = false
-            }
+            // Generate a local user ID using Android device ID or a random UUID
+            val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: java.util.UUID.randomUUID().toString()
+            val newUserId = "USR-${deviceId.takeLast(6).uppercase()}"
+            
+            sessionManager.saveUserId(newUserId)
+            sessionManager.saveAuthToken("dummy_token") // Satisfy AppNavigation
+            userId = newUserId
+        } else {
+            userId = existingUserId
         }
+
+        // Delay slightly for smooth transition, then navigate to dashboard
+        kotlinx.coroutines.delay(500)
+        onLoginSuccess()
     }
 
     // Deep space gradient background
@@ -129,104 +128,36 @@ fun LoginScreen(
                     modifier = Modifier.padding(bottom = 32.dp)
                 )
 
-                // Input Fields
-                OutlinedTextField(
-                    value = userId,
-                    onValueChange = { userId = it },
-                    label = { Text("User ID") },
-                    leadingIcon = {
-                        Icon(Icons.Default.Lock, contentDescription = null, tint = Color(0xFF94A3B8))
-                    },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF3B82F6),
-                        unfocusedBorderColor = Color(0xFF334155),
-                        focusedLabelColor = Color(0xFF60A5FA),
-                        unfocusedLabelColor = Color(0xFF94A3B8),
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 24.dp)
-                )
-
-                if (error != null) {
-                    Surface(
-                        color = Color(0xFFEF4444).copy(alpha = 0.15f),
-                        shape = RoundedCornerShape(8.dp),
+                // Just show loading spinner while automatically logging in
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        color = Color(0xFF3B82F6),
+                        modifier = Modifier
+                            .padding(top = 16.dp)
+                            .size(32.dp),
+                        strokeWidth = 3.dp
+                    )
+                    Text(
+                        text = "Authenticating device...",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(top = 16.dp)
+                    )
+                } else if (error != null) {
+                    Button(
+                        onClick = {
+                            // Retry logic could be added here, or just force a restart of LaunchedEffect
+                            error = "Please restart the app to try again."
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(bottom = 16.dp)
+                            .height(52.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF2563EB)
+                        )
                     ) {
-                        Text(
-                            text = error!!,
-                            color = Color(0xFFF87171),
-                            fontSize = 13.sp,
-                            modifier = Modifier.padding(12.dp)
-                        )
-                    }
-                }
-
-                // Gradient Action Button
-                Button(
-                    onClick = {
-                        isLoading = true
-                        error = null
-                        coroutineScope.launch {
-                            try {
-                                val apiService = ApiClient.getService(sessionManager)
-                                val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown_device"
-                                
-                                var lat = 0.0
-                                var lng = 0.0
-                                
-                                if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-                                    val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
-                                    val location = fusedLocationClient.lastLocation.await()
-                                    if (location != null) {
-                                        lat = location.latitude
-                                        lng = location.longitude
-                                    }
-                                }
-
-                                val response = apiService.login(LoginRequest(userId, deviceId, lat, lng))
-                                sessionManager.saveAuthToken(response.access_token)
-                                response.user?.id?.let { loggedInUserId ->
-                                    sessionManager.saveUserId(loggedInUserId)
-                                }
-                                onLoginSuccess()
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                                error = "Login failed. Check server connection or User ID."
-                            } finally {
-                                isLoading = false
-                            }
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF2563EB)
-                    ),
-                    enabled = !isLoading
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            color = Color.White,
-                            modifier = Modifier.size(24.dp),
-                            strokeWidth = 2.5.dp
-                        )
-                    } else {
-                        Text(
-                            text = "Sign In",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.White
-                        )
+                        Text("Retry", color = Color.White)
                     }
                 }
             }

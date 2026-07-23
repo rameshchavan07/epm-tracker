@@ -32,7 +32,7 @@ data class LoginResponse(
 
 data class LocationBatchRequest(
     val deviceId: String,
-    val userId: String? = null,
+    val mobileUserId: String? = null,
     val latitude: Double,
     val longitude: Double,
     val accuracy: Float? = null,

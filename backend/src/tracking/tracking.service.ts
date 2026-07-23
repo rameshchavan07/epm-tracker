@@ -93,7 +93,7 @@ export class TrackingService {
             data: {
               latitude: loc.latitude,
               longitude: loc.longitude,
-              lastLocationAt: recordedAt,
+              lastLocationAt: new Date(),
               status: true,
             },
           });
@@ -105,7 +105,7 @@ export class TrackingService {
               userId: loc.mobileUserId || generatedUserId,
               latitude: loc.latitude,
               longitude: loc.longitude,
-              lastLocationAt: recordedAt,
+              lastLocationAt: new Date(),
               status: true,
             },
           });
