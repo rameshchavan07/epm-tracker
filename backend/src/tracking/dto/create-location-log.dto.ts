@@ -22,14 +22,6 @@ export class CreateLocationLogDto {
   accuracy?: number;
 
   @IsNumber()
-  @IsOptional()
-  speed?: number;
-
-  @IsNumber()
-  @IsOptional()
-  batteryLevel?: number;
-
-  @IsNumber()
   @IsNotEmpty()
   timestamp: number;
 }

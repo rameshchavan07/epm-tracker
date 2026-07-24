@@ -40,11 +40,6 @@ export class MobileUsersService {
         where: { deviceId },
         data: {
           status: true,
-          ...(latitude !== undefined ? { latitude } : {}),
-          ...(longitude !== undefined ? { longitude } : {}),
-          ...(latitude !== undefined || longitude !== undefined
-            ? { lastLocationAt: now }
-            : {}),
           ...(userId ? { userId } : {}),
         },
       });
@@ -55,9 +50,6 @@ export class MobileUsersService {
       data: {
         deviceId,
         userId: userId || generatedUserId,
-        latitude: latitude || null,
-        longitude: longitude || null,
-        lastLocationAt: latitude !== undefined ? now : null,
         status: true,
       },
     });
@@ -80,22 +72,22 @@ export class MobileUsersService {
     });
   }
 
-  async findById(id: string): Promise<MobileUser | null> {
+  async findById(deviceId: string): Promise<MobileUser | null> {
     return await this.prisma.mobileUser.findUnique({
-      where: { id },
+      where: { deviceId },
     });
   }
 
-  async update(id: string, dto: UpdateMobileUserDto): Promise<MobileUser> {
+  async update(deviceId: string, dto: UpdateMobileUserDto): Promise<MobileUser> {
     return await this.prisma.mobileUser.update({
-      where: { id },
+      where: { deviceId },
       data: dto,
     });
   }
 
-  async delete(id: string): Promise<MobileUser> {
+  async delete(deviceId: string): Promise<MobileUser> {
     return await this.prisma.mobileUser.delete({
-      where: { id },
+      where: { deviceId },
     });
   }
 }

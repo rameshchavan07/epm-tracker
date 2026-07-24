@@ -20,12 +20,8 @@ model WebUser {
 }
 
 model MobileUser {
-  id             String        @id @default(uuid())
-  deviceId       String        @unique
+  deviceId       String        @id
   userId         String        @unique
-  latitude       Float?
-  longitude      Float?
-  lastLocationAt DateTime?
   status         Boolean       @default(true)
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
@@ -35,17 +31,13 @@ model MobileUser {
 
 model LocationLog {
   id           String     @id @default(uuid())
-  mobileUserId String
   deviceId     String
   latitude     Float
   longitude    Float
   accuracy     Float?
-  speed        Float?
-  batteryLevel Int?
   recordedAt   DateTime   @default(now())
 
-  mobileUser   MobileUser @relation(fields: [mobileUserId], references: [id], onDelete: Cascade)
+  mobileUser   MobileUser @relation(fields: [deviceId], references: [deviceId], onDelete: Cascade)
 
-  @@index([mobileUserId, recordedAt])
   @@index([deviceId, recordedAt])
 }

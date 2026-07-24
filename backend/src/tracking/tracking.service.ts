@@ -7,13 +7,10 @@ import { LocationLog } from '@prisma/client';
 
 export interface LocationHistoryItem {
   id: string;
-  mobileUserId: string;
   deviceId: string;
   lat: number;
   lng: number;
   accuracy: number | null;
-  speed: number | null;
-  batteryLevel: number | null;
   recordedAt: Date;
 }
 
@@ -90,9 +87,6 @@ export class TrackingService {
           mobileUser = await this.prisma.mobileUser.update({
             where: { deviceId: loc.deviceId },
             data: {
-              latitude: loc.latitude,
-              longitude: loc.longitude,
-              lastLocationAt: new Date(),
               status: true,
             },
           });
@@ -102,9 +96,6 @@ export class TrackingService {
             data: {
               deviceId: loc.deviceId,
               userId: loc.mobileUserId || generatedUserId,
-              latitude: loc.latitude,
-              longitude: loc.longitude,
-              lastLocationAt: new Date(),
               status: true,
             },
           });
@@ -113,13 +104,11 @@ export class TrackingService {
         // 2. Insert LocationLog
         await this.prisma.locationLog.create({
           data: {
-            mobileUserId: mobileUser.id,
+            mobileUser: { connect: { deviceId: loc.deviceId } },
             deviceId: loc.deviceId,
             latitude: loc.latitude,
             longitude: loc.longitude,
             accuracy: loc.accuracy ?? null,
-            speed: loc.speed ?? null,
-            batteryLevel: loc.batteryLevel ?? null,
             recordedAt,
           },
         });
@@ -128,13 +117,13 @@ export class TrackingService {
 
         // 3. Broadcast WebSocket update to web dashboard
         this.trackingGateway.broadcastLocationUpdate({
-          id: mobileUser.id,
+          id: mobileUser.deviceId,
           deviceId: mobileUser.deviceId,
           name: mobileUser.userId,
           status: 'Active',
           lat: loc.latitude,
           lng: loc.longitude,
-          battery: loc.batteryLevel ?? 90,
+          battery: 100,
           recordedAt,
         });
       } catch (error) {
@@ -169,7 +158,7 @@ export class TrackingService {
 
     const logs: LocationLog[] = await this.prisma.locationLog.findMany({
       where: {
-        OR: [{ mobileUserId: identifier }, { deviceId: identifier }],
+        deviceId: identifier,
         ...(dateFilter ? { recordedAt: dateFilter } : {}),
       },
       orderBy: { recordedAt: 'desc' },
@@ -178,37 +167,40 @@ export class TrackingService {
 
     return logs.map((log: LocationLog) => ({
       id: log.id,
-      mobileUserId: log.mobileUserId,
       deviceId: log.deviceId,
       lat: log.latitude,
       lng: log.longitude,
       accuracy: log.accuracy,
-      speed: log.speed,
-      batteryLevel: log.batteryLevel,
       recordedAt: log.recordedAt,
     }));
   }
 
   async getLatestLocations(): Promise<LatestLocationItem[]> {
     const mobileUsers = await this.prisma.mobileUser.findMany({
-      where: {
-        latitude: { not: null },
-        longitude: { not: null },
+      include: {
+        locationLogs: {
+          orderBy: { recordedAt: 'desc' },
+          take: 1,
+        },
       },
-      orderBy: { lastLocationAt: 'desc' },
     });
 
-    return mobileUsers.map((user) => ({
-      id: user.id,
-      deviceId: user.deviceId,
-      userId: user.userId,
-      name: user.userId,
-      status: user.status ? 'Active' : 'Offline',
-      lat: user.latitude,
-      lng: user.longitude,
-      battery: 90,
-      recordedAt: user.lastLocationAt,
-    }));
+    return mobileUsers
+      .filter((user) => user.locationLogs.length > 0)
+      .map((user) => {
+        const latestLog = user.locationLogs[0];
+        return {
+          id: user.deviceId,
+          deviceId: user.deviceId,
+          userId: user.userId,
+          name: user.userId,
+          status: user.status ? 'Active' : 'Offline',
+          lat: latestLog.latitude,
+          lng: latestLog.longitude,
+          battery: 90,
+          recordedAt: latestLog.recordedAt,
+        };
+      });
   }
 
   async getAnalytics(): Promise<AnalyticsResult> {
@@ -244,33 +236,39 @@ export class TrackingService {
     const staleDevices = await this.prisma.mobileUser.findMany({
       where: {
         status: true,
-        OR: [
-          { lastLocationAt: { lt: fiveMinutesAgo } },
-          { lastLocationAt: null },
-        ],
       },
-      select: { id: true, deviceId: true, userId: true },
+      include: {
+        locationLogs: {
+          orderBy: { recordedAt: 'desc' },
+          take: 1,
+        },
+      },
     });
 
-    if (staleDevices.length === 0) return;
+    const devicesToMarkOffline = staleDevices.filter((device) => {
+      if (device.locationLogs.length === 0) return true;
+      return device.locationLogs[0].recordedAt < fiveMinutesAgo;
+    });
 
-    const staleIds = staleDevices.map((d) => d.id);
+    if (devicesToMarkOffline.length === 0) return;
+
+    const staleDeviceIds = devicesToMarkOffline.map((d) => d.deviceId);
     await this.prisma.mobileUser.updateMany({
-      where: { id: { in: staleIds } },
+      where: { deviceId: { in: staleDeviceIds } },
       data: { status: false },
     });
 
-    const deviceNames = staleDevices
+    const deviceNames = devicesToMarkOffline
       .map((d) => d.userId || d.deviceId)
       .join(', ');
     this.logger.log(
-      `Marked ${staleDevices.length} device(s) offline: ${deviceNames}`,
+      `Marked ${devicesToMarkOffline.length} device(s) offline: ${deviceNames}`,
     );
 
-    for (const device of staleDevices) {
+    for (const device of devicesToMarkOffline) {
       const displayName = device.userId || device.deviceId;
       this.trackingGateway.broadcastLocationUpdate({
-        id: device.id,
+        id: device.deviceId,
         deviceId: device.deviceId,
         name: displayName,
         status: 'Offline',
@@ -284,18 +282,18 @@ export class TrackingService {
     if (!deviceId) return;
     const device = await this.prisma.mobileUser.findUnique({
       where: { deviceId },
-      select: { id: true, deviceId: true, userId: true },
+      select: { deviceId: true, userId: true },
     });
 
     if (!device) return;
 
     await this.prisma.mobileUser.update({
-      where: { id: device.id },
+      where: { deviceId: device.deviceId },
       data: { status: false },
     });
 
     this.trackingGateway.broadcastLocationUpdate({
-      id: device.id,
+      id: device.deviceId,
       deviceId: device.deviceId,
       name: device.userId || device.deviceId,
       status: 'Offline',

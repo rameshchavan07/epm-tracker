@@ -53,30 +53,22 @@ async function main() {
       where: { deviceId: dev.deviceId },
       update: {
         userId: dev.userId,
-        latitude: dev.lat,
-        longitude: dev.lng,
-        lastLocationAt: new Date(),
         status: dev.status,
       },
       create: {
         deviceId: dev.deviceId,
         userId: dev.userId,
-        latitude: dev.lat,
-        longitude: dev.lng,
-        lastLocationAt: new Date(),
         status: dev.status,
       },
     });
 
     await prisma.locationLog.create({
       data: {
-        mobileUserId: mobileUser.id,
+        mobileUser: { connect: { deviceId: dev.deviceId } },
         deviceId: dev.deviceId,
         latitude: dev.lat,
         longitude: dev.lng,
         accuracy: 10.0,
-        speed: 15.5,
-        batteryLevel: Math.floor(Math.random() * 40) + 60,
         recordedAt: new Date(),
       },
     });
