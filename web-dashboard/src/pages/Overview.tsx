@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, UserCheck, UserX, MapPin, Download } from 'lucide-react';
+import { Users, UserCheck, UserX, MapPin } from 'lucide-react';
 import apiClient from '../api/client';
-import { exportTeamAttendanceCsv } from '../utils/exportCsv';
 
 interface AnalyticsData {
   totalUsers: number;
@@ -44,17 +43,6 @@ const Overview: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const handleExportCsv = async () => {
-    try {
-      const response = await apiClient.get('/tracking/latest');
-      if (response.data) {
-        exportTeamAttendanceCsv(response.data);
-      }
-    } catch (err) {
-      console.error('Failed to export CSV', err);
-    }
-  };
-
   const formatTime = (isoString: string) => {
     const date = new Date(isoString);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -62,29 +50,11 @@ const Overview: React.FC = () => {
 
   return (
     <div className="page-container animate-fade-in">
-      <header className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <header className="page-header">
         <div>
           <h1>Analytics Overview</h1>
           <p className="text-secondary">Real-time presence metrics and system activity</p>
         </div>
-        <button
-          onClick={handleExportCsv}
-          className="btn-primary"
-          style={{
-            width: 'auto',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '10px 18px',
-            fontSize: '14px',
-            borderRadius: '10px',
-            background: 'rgba(59, 130, 246, 0.15)',
-            border: '1px solid rgba(59, 130, 246, 0.3)',
-            color: '#60a5fa',
-          }}
-        >
-          <Download size={16} /> Export CSV Report
-        </button>
       </header>
 
       {/* KPI Cards */}

@@ -52,23 +52,30 @@ const Employees: React.FC = () => {
   }, []);
 
   const handleExportCSV = () => {
+    if (!devices || devices.length === 0) {
+      alert('No device data available to export.');
+      return;
+    }
+
     const headers = ['User ID', 'Device Hardware ID (ANDROID_ID)', 'Status', 'Last Ping'];
-    const csvContent = [
+    const csvContent = '\uFEFF' + [
       headers.join(','),
       ...devices.map(dev =>
-        `"${dev.userId}","${dev.deviceId}","${dev.status ? 'Active' : 'Offline'}","${dev.lastLocationAt ? new Date(dev.lastLocationAt).toLocaleString() : 'Never'}"`
+        `"${dev.userId || 'N/A'}","${dev.deviceId || 'N/A'}","${dev.status ? 'Active' : 'Offline'}","${dev.lastLocationAt ? new Date(dev.lastLocationAt).toLocaleString() : 'Never'}"`
       )
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', 'mobile_devices_export.csv');
-    link.style.visibility = 'hidden';
+    link.href = url;
+    link.download = 'mobile_devices_export.csv';
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
+    setTimeout(() => {
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }, 100);
   };
 
   const handleSaveEdit = async () => {
