@@ -104,7 +104,6 @@ export class TrackingService {
         // 2. Insert LocationLog
         await this.prisma.locationLog.create({
           data: {
-            mobileUser: { connect: { deviceId: loc.deviceId } },
             deviceId: loc.deviceId,
             latitude: loc.latitude,
             longitude: loc.longitude,
@@ -156,9 +155,17 @@ export class TrackingService {
         }
       : undefined;
 
+    const mobileUser = await this.prisma.mobileUser.findFirst({
+      where: {
+        OR: [{ deviceId: identifier }, { userId: identifier }],
+      },
+    });
+
+    const targetDeviceId = mobileUser ? mobileUser.deviceId : identifier;
+
     const logs: LocationLog[] = await this.prisma.locationLog.findMany({
       where: {
-        deviceId: identifier,
+        deviceId: targetDeviceId,
         ...(dateFilter ? { recordedAt: dateFilter } : {}),
       },
       orderBy: { recordedAt: 'desc' },

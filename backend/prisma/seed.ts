@@ -64,7 +64,6 @@ async function main() {
 
     await prisma.locationLog.create({
       data: {
-        mobileUser: { connect: { deviceId: dev.deviceId } },
         deviceId: dev.deviceId,
         latitude: dev.lat,
         longitude: dev.lng,

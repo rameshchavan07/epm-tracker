@@ -116,7 +116,7 @@ const LiveMap: React.FC = () => {
 
           if (targetUserId) {
             setShowHistory(true);
-            fetchRouteHistory(selected.id);
+            fetchRouteHistory(selected.deviceId || selected.id || selected.userId);
           }
         }
       } catch (error) {
@@ -234,7 +234,7 @@ const LiveMap: React.FC = () => {
     setActiveEmployee(emp);
     setMapCenter([emp.lat, emp.lng]);
     if (showHistory) {
-      void fetchRouteHistory(emp.id);
+      void fetchRouteHistory(emp.deviceId || emp.id || emp.userId);
     }
     if (window.innerWidth < 768) {
       setIsSidebarOpen(false);
@@ -245,7 +245,7 @@ const LiveMap: React.FC = () => {
     const nextState = !showHistory;
     setShowHistory(nextState);
     if (nextState && activeEmployee) {
-      void fetchRouteHistory(activeEmployee.id, selectedDate);
+      void fetchRouteHistory(activeEmployee.deviceId || activeEmployee.id || activeEmployee.userId, selectedDate);
     } else {
       setIsPlaying(false);
     }
@@ -715,10 +715,12 @@ const LiveMap: React.FC = () => {
               <input
                 type="date"
                 value={selectedDate}
+                onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
                 onChange={(e) => {
                   const newDate = e.target.value;
                   setSelectedDate(newDate);
-                  if (activeEmployee) fetchRouteHistory(activeEmployee.id, newDate);
+                  const empId = activeEmployee?.deviceId || activeEmployee?.id || activeEmployee?.userId;
+                  if (empId) fetchRouteHistory(empId, newDate);
                 }}
                 style={{
                   background: 'rgba(0, 0, 0, 0.4)',
@@ -729,6 +731,7 @@ const LiveMap: React.FC = () => {
                   fontSize: '13px',
                   outline: 'none',
                   cursor: 'pointer',
+                  colorScheme: 'dark',
                 }}
               />
             </div>

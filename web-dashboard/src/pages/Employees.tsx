@@ -4,13 +4,10 @@ import { Smartphone, Search, Edit, Trash2, Download, Navigation, X, Check } from
 import apiClient from '../api/client';
 
 interface MobileDevice {
-  id: string;
   deviceId: string;
   userId: string;
-  latitude?: number;
-  longitude?: number;
-  lastLocationAt?: string;
   status: boolean;
+  lastLocationAt?: string;
   createdAt?: string;
   _count?: {
     locationLogs: number;
@@ -77,7 +74,7 @@ const Employees: React.FC = () => {
   const handleSaveEdit = async () => {
     if (!editingDevice) return;
     try {
-      await apiClient.patch(`/mobile-users/${editingDevice.id}`, {
+      await apiClient.patch(`/mobile-users/${editingDevice.deviceId}`, {
         userId: editUserId,
       });
       setEditingDevice(null);
@@ -87,10 +84,10 @@ const Employees: React.FC = () => {
     }
   };
 
-  const handleDeleteDevice = async (id: string) => {
+  const handleDeleteDevice = async (deviceId: string) => {
     if (!window.confirm('Are you sure you want to remove this device registration?')) return;
     try {
-      await apiClient.delete(`/mobile-users/${id}`);
+      await apiClient.delete(`/mobile-users/${deviceId}`);
       fetchDevices();
     } catch (err) {
       console.error('Failed to delete device', err);
@@ -102,8 +99,9 @@ const Employees: React.FC = () => {
     setLoadingHistory(true);
     setHistoryLogs([]);
     try {
+      const targetId = device.deviceId || device.userId;
       // Use limit to fetch most recent 100 location logs
-      const response = await apiClient.get(`/tracking/history/${device.id}?limit=100`);
+      const response = await apiClient.get(`/tracking/history/${targetId}?limit=100`);
       if (response.data && Array.isArray(response.data)) {
         setHistoryLogs(response.data);
       }
@@ -299,7 +297,7 @@ const Employees: React.FC = () => {
                   <td colSpan={5} className="text-center py-8">No registered mobile devices found.</td>
                 </tr>
               ) : filteredDevices.map((dev) => (
-                <tr key={dev.id}>
+                <tr key={dev.deviceId}>
                   <td>
                     <div className="flex items-center gap-2">
                       <Smartphone size={16} className="text-blue-400" />
@@ -335,7 +333,7 @@ const Employees: React.FC = () => {
                       <button
                         className="icon-btn text-blue-400"
                         title="View Travel Route"
-                        onClick={() => navigate(`/dashboard/map?userId=${dev.id}`)}
+                        onClick={() => navigate(`/dashboard/map?userId=${dev.deviceId}`)}
                       >
                         <Navigation size={16} />
                       </button>

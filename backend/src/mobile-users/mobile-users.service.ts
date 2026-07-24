@@ -55,14 +55,31 @@ export class MobileUsersService {
     });
   }
 
-  async findAll(): Promise<MobileUser[]> {
-    return await this.prisma.mobileUser.findMany({
+  async findAll(): Promise<any[]> {
+    const devices = await this.prisma.mobileUser.findMany({
       orderBy: { updatedAt: 'desc' },
       include: {
+        locationLogs: {
+          orderBy: { recordedAt: 'desc' },
+          take: 1,
+        },
         _count: {
           select: { locationLogs: true },
         },
       },
+    });
+
+    return devices.map((dev) => {
+      const lastLog = dev.locationLogs[0];
+      return {
+        deviceId: dev.deviceId,
+        userId: dev.userId,
+        status: dev.status,
+        createdAt: dev.createdAt,
+        updatedAt: dev.updatedAt,
+        lastLocationAt: lastLog ? lastLog.recordedAt : null,
+        _count: dev._count,
+      };
     });
   }
 
