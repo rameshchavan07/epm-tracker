@@ -16,6 +16,8 @@
   - `[x]` Create `SyncWorker` (WorkManager task for background batch sync of offline Room location logs)
   - `[x]` Immediate sync triggers on Start/Stop tracking button clicks and network reconnection events
   - `[x]` Removed 5-second hardcoded testing interval override to use dynamic tracking frequency
+  - `[x]` On-device reverse geocoding via `android.location.Geocoder` to resolve place/street names in background service notifications and Room DB
+  - `[x]` Record active capture interval latency (e.g. 2 min vs 10 min) with every local Room location log
 - `[x]` **User Interface Modernization (Jetpack Compose)**
   - `[x]` Build `LoginScreen` with dark space gradient background, brand badge, and rounded Material 3 fields
   - `[x]` Build `DashboardScreen` updated title to **"Field Agent"** and live User ID display (`User: USR-XXXXX`)
@@ -34,17 +36,18 @@
   - `[x]` **Model Clean-up**: Deprecated and removed redundant `Company` table
   - `[x]` **Primary Key Refactoring**: Set `deviceId` as `@id` on `MobileUser` and dropped duplicate `id` UUID column
   - `[x]` **Data Normalization**: Dropped duplicate/cached fields (`latitude`, `longitude`, `lastLocationAt`) from `MobileUser`
-  - `[x]` **Log Optimization**: Removed unused `speed` and `batteryLevel` columns and redundant `mobileUserId` column from `LocationLog`
+  - `[x]` **Log Optimization**: Removed unused `speed` and `batteryLevel` columns and added optional `address` & `intervalMinutes` columns to `LocationLog`
   - `[x]` Synchronized schema with Neon PostgreSQL (`npx prisma db push --accept-data-loss`)
   - `[x]` Updated seed script (`prisma/seed.ts`) with normalized schema structures
-- `[x]` **Complete API Endpoint Suite**
+- `[x]` **Complete API Endpoint Suite & Reverse Geocoding**
   - `[x]` **Auth Module (`/api/v1/auth`)**: `POST /login`, `POST /register`, `GET /me`
   - `[x]` **Users Module (`/api/v1/users`)**: `GET /`, `GET /:id`, `POST /`, `PATCH /:id`, `DELETE /:id`
   - `[x]` **Tracking Module (`/api/v1/tracking`)**: `POST /location`, `POST /location/batch`, `GET /latest`, `GET /history/:userId`, `GET /analytics`, `GET /config`
   - `[x]` **Mobile Users Module (`/api/v1/mobile-users`)**: Device registration and management API using `deviceId` PK
+  - `[x]` **Server-Side Fallback Reverse Geocoding**: Integrated OpenStreetMap Nominatim reverse geocoding fallback for missing address payloads
 - `[x]` **WebSockets Real-Time Live Gateway**
   - `[x]` Create `TrackingGateway` (`tracking.gateway.ts`) for Socket.io WebSocket streaming
-  - `[x]` Broadcast `locationUpdate` events from `TrackingService` on incoming location pings
+  - `[x]` Broadcast `locationUpdate` events with live place names and capture latency mode on incoming pings
 - `[x]` **Validation & Code Quality**
   - `[x]` Add request DTO validation and enable global NestJS `ValidationPipe`
   - `[x]` Verified zero TypeScript compilation errors in backend watcher
@@ -63,6 +66,9 @@
   - `[x]` `LiveMap.tsx`: OpenStreetMap Leaflet integration with Socket.io real-time live location listener
   - `[x]` **Interactive Calendar Date Picker**: Native `showPicker()` click trigger with dark mode `colorScheme: dark` styling for instant route playback filtering by date
   - `[x]` **Route Playback & Breadcrumb History**: Interactive map path rendering with dashed Polyline, circle stop markers, and timeline scrubber controls
+  - `[x]` **Reverse Geocoding Address & Latency Mode Badges**:
+    - `[x]` Display full human-readable addresses in map marker popups, sidebar active user card, and history playback stops
+    - `[x]` Display active capture latency badges (`⚡ 2 min interval` / `⚡ 10 min interval`)
   - `[x]` **Field Worker Travel Tracking & Metrics Summary**:
     - `[x]` Haversine distance calculator (`travelMetrics.ts`) for total kilometers traveled
     - `[x]` Travel duration calculation (hours & minutes) and visited stop locations counter
