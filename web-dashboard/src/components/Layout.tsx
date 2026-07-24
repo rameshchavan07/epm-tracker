@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { BarChart3, Map as MapIcon, Users, LogOut, Menu, X } from 'lucide-react';
+import { BarChart3, Map as MapIcon, Users, Settings, LogOut, Menu, X } from 'lucide-react';
 
 const Layout: React.FC = () => {
   const navigate = useNavigate();
@@ -18,6 +18,7 @@ const Layout: React.FC = () => {
     { name: 'Overview', path: '/dashboard', icon: <BarChart3 className="nav-icon" /> },
     { name: 'Live Map', path: '/dashboard/map', icon: <MapIcon className="nav-icon" /> },
     { name: 'Employees', path: '/dashboard/employees', icon: <Users className="nav-icon" /> },
+    { name: 'Settings', path: '/dashboard/settings', icon: <Settings className="nav-icon" /> },
   ];
 
   return (
