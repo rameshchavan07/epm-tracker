@@ -7,15 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Company {
-  id               String   @id @default(uuid())
-  name             String   @default("Acme Corp")
-  subscriptionPlan String   @default("PRO")
-  trackingInterval Int      @default(2)
-  status           Boolean  @default(true)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-}
 
 model WebUser {
   id           String   @id @default(uuid())

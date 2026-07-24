@@ -5,7 +5,7 @@ import Layout from './components/Layout';
 import Overview from './pages/Overview';
 import LiveMap from './pages/LiveMap';
 import Employees from './pages/Employees';
-import CompanySettings from './pages/CompanySettings';
+
 
 const App: React.FC = () => {
   return (
@@ -18,7 +18,7 @@ const App: React.FC = () => {
           <Route index element={<Overview />} />
           <Route path="map" element={<LiveMap />} />
           <Route path="employees" element={<Employees />} />
-          <Route path="settings" element={<CompanySettings />} />
+
         </Route>
         
         <Route path="*" element={<Navigate to="/" replace />} />

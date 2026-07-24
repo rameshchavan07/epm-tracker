@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { BarChart3, Map as MapIcon, Users, Settings, LogOut, Menu, X } from 'lucide-react';
+import { BarChart3, Map as MapIcon, Users, LogOut, Menu, X } from 'lucide-react';
 
 const Layout: React.FC = () => {
   const navigate = useNavigate();
@@ -56,12 +56,6 @@ const Layout: React.FC = () => {
         </nav>
 
         <div className="sidebar-bottom">
-          <button
-            className={`nav-link ${location.pathname === '/dashboard/settings' ? 'active' : ''}`}
-            onClick={() => navigate('/dashboard/settings')}
-          >
-            <Settings className="nav-icon" /> Settings
-          </button>
           <button className="nav-link text-danger" onClick={() => navigate('/')}>
             <LogOut className="nav-icon" /> Logout
           </button>

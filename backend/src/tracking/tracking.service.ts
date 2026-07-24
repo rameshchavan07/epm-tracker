@@ -48,8 +48,7 @@ export class TrackingService {
   ) {}
 
   async getTrackingConfig() {
-    const company = await this.prisma.company.findFirst();
-    const intervalMinutes = company?.trackingInterval ?? 2;
+    const intervalMinutes = 2;
     return {
       trackingIntervalMinutes: intervalMinutes,
       trackingIntervalMs: intervalMinutes * 60 * 1000,
