@@ -29,11 +29,13 @@ const Login: React.FC = () => {
     <div className="full-screen flex-center bg-animated">
       <div className="glass-panel login-card animate-fade-in">
         <div className="login-header">
-          <div className="icon-container" style={{ padding: '0', background: 'transparent', boxShadow: 'none' }}>
-            <img src="/logo.png" alt="EPM Logo" style={{ width: '64px', height: '64px', borderRadius: '12px' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>
+            <img src="/logo.png" alt="EMP Logo" style={{ width: '64px', height: '64px', borderRadius: '12px' }} />
+            <div>
+              <h1>EMP Tracker</h1>
+              <p>Enter your credentials to access the live dashboard</p>
+            </div>
           </div>
-          <h1>EPM Tracker</h1>
-          <p>Enter your credentials to access the live dashboard</p>
         </div>
 
         {error && <div className="text-red-400 text-center mb-4 text-sm font-medium">{error}</div>}

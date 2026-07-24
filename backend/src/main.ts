@@ -13,8 +13,8 @@ async function bootstrap() {
   app.enableCors();
 
   const config = new DocumentBuilder()
-    .setTitle('EPM API')
-    .setDescription('The EPM API description')
+    .setTitle('EMP API')
+    .setDescription('The EMP API description')
     .setVersion('1.0')
     .addBearerAuth()
     .build();

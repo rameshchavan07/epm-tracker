@@ -66,7 +66,7 @@ class TrackingService : Service() {
         }
 
         val notification = NotificationCompat.Builder(this, "tracking_channel")
-            .setContentTitle("EPM Tracking")
+            .setContentTitle("EMP Tracking")
             .setContentText("Tracking your location...")
             .setSmallIcon(android.R.drawable.sym_def_app_icon)
             .setOngoing(true)
@@ -89,6 +89,7 @@ class TrackingService : Service() {
             }
         }
 
+        // Use the dynamically synced tracking interval
         val trackingInterval = sessionManager.getTrackingInterval()
 
         // Resolve the logged-in user's real ID and device ID

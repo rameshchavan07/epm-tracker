@@ -19,7 +19,7 @@ export class CompanyService {
     if (!company) {
       company = await this.prisma.company.create({
         data: {
-          name: 'EPM Tracker Enterprise',
+          name: 'EMP Tracker Enterprise',
           subscriptionPlan: 'PRO',
           trackingInterval: 2,
           status: true,
@@ -34,7 +34,7 @@ export class CompanyService {
     if (!existing) {
       return await this.prisma.company.create({
         data: {
-          name: dto.name ?? 'EPM Tracker Enterprise',
+          name: dto.name ?? 'EMP Tracker Enterprise',
           subscriptionPlan: dto.subscriptionPlan ?? 'PRO',
           trackingInterval: dto.trackingInterval ?? 2,
           status: true,

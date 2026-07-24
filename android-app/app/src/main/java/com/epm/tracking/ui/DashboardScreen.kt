@@ -27,9 +27,14 @@ import androidx.compose.animation.*
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import com.epm.tracking.service.TrackingService
-import com.epm.tracking.data.AppDatabase
+import com.epm.tracking.data.local.AppDatabase
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.NetworkType
+import androidx.work.Constraints
+import com.epm.tracking.worker.SyncWorker
 
 @Composable
 fun DashboardScreen(
@@ -40,6 +45,8 @@ fun DashboardScreen(
     var isConnected by remember { mutableStateOf(false) }
     
     val db = remember { AppDatabase.getDatabase(context) }
+    val sessionManager = remember { com.epm.tracking.data.SessionManager(context) }
+    val currentUserId = sessionManager.getUserId() ?: "Unknown User"
     val unsyncedCount by db.locationDao().getUnsyncedCount().collectAsState(initial = 0)
     @Suppress("SpellCheckingInspection")
     val snackbarHostState = remember { SnackbarHostState() }
@@ -66,7 +73,15 @@ fun DashboardScreen(
         while (true) {
             try {
                 val response = api.checkHealth()
+                val wasConnected = isConnected
                 isConnected = response.isSuccessful
+                
+                // Force an immediate background sync when network is restored
+                if (!wasConnected && isConnected) {
+                    val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+                    val syncRequest = OneTimeWorkRequestBuilder<SyncWorker>().setConstraints(constraints).build()
+                    WorkManager.getInstance(context).enqueue(syncRequest)
+                }
             } catch (_: Exception) {
                 isConnected = false
             }
@@ -113,10 +128,17 @@ fun DashboardScreen(
             ) {
                 Column {
                     Text(
-                        text = "EPM Field Agent",
+                        text = "Field Agent",
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
+                    )
+                    Text(
+                        text = "User: $currentUserId",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF60A5FA),
+                        modifier = Modifier.padding(top = 2.dp, bottom = 2.dp)
                     )
                     Text(
                         text = "Live GPS Service Control",
@@ -329,6 +351,11 @@ fun DashboardScreen(
                         }
                     }
                     isTracking = !isTracking
+                    
+                    // Trigger an immediate sync when toggling tracking state
+                    val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+                    val syncRequest = OneTimeWorkRequestBuilder<SyncWorker>().setConstraints(constraints).build()
+                    WorkManager.getInstance(context).enqueue(syncRequest)
                 },
                 modifier = Modifier
                     .fillMaxWidth()

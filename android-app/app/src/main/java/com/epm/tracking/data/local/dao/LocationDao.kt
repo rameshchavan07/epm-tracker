@@ -24,4 +24,7 @@ interface LocationDao {
 
     @Query("DELETE FROM location_logs WHERE isSynced = 1 AND timestamp < :timestampLimit")
     suspend fun deleteOldSyncedLocations(timestampLimit: Long)
+
+    @Query("SELECT COUNT(*) FROM location_logs WHERE isSynced = 0")
+    fun getUnsyncedCount(): kotlinx.coroutines.flow.Flow<Int>
 }

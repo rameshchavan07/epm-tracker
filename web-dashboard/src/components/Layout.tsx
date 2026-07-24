@@ -33,10 +33,10 @@ const Layout: React.FC = () => {
       {/* Global Sidebar */}
       <aside className={`global-sidebar ${isSidebarOpen ? 'open' : 'closed'}`}>
         <div className="sidebar-brand">
-          <div className="brand-logo flex-center" style={{ padding: '0', background: 'transparent', boxShadow: 'none' }}>
-            <img src="/logo.png" alt="EPM Logo" style={{ width: '40px', height: '40px', borderRadius: '8px' }} />
+          <div className="icon-container" style={{ padding: '0', background: 'transparent', boxShadow: 'none' }}>
+            <img src="/logo.png" alt="EMP Logo" style={{ width: '40px', height: '40px', borderRadius: '8px' }} />
           </div>
-          <h2>EPM Tracker</h2>
+          <h2>EMP Tracker</h2>
         </div>
 
         <nav className="sidebar-nav">

@@ -68,7 +68,7 @@ class LocationService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 channelId,
-                "EPM Tracking Service",
+                "EMP Tracking Service",
                 NotificationManager.IMPORTANCE_LOW
             )
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -76,7 +76,7 @@ class LocationService : Service() {
         }
 
         val notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("EPM Tracker")
+            .setContentTitle("EMP Tracker")
             .setContentText("Actively tracking location...")
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .build()

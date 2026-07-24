@@ -448,7 +448,7 @@ body {
 }
 
 /* Leaflet Dark Theme Adjustments */
-.leaflet-layer,
+.dashboard-main:not(.map-style-satellite) .leaflet-layer,
 .leaflet-control-zoom-in,
 .leaflet-control-zoom-out,
 .leaflet-control-attribution {

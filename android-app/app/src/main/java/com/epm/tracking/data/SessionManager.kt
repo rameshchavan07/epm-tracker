@@ -47,7 +47,7 @@ class SessionManager(context: Context) {
     }
 
     fun getTrackingInterval(): Long {
-        return sharedPreferences.getLong(KEY_TRACKING_INTERVAL, 120000L)
+        return sharedPreferences.getLong(KEY_TRACKING_INTERVAL, 5000L)
     }
 
     fun clearSession() {

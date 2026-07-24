@@ -432,10 +432,10 @@ const LiveMap: React.FC = () => {
       </aside>
 
       {/* Main Map Area */}
-      <main className="dashboard-main" style={{ position: 'relative' }}>
+      <main className={`dashboard-main map-style-${mapStyle}`} style={{ position: 'relative' }}>
         
         {/* Map Style Selector */}
-        <div style={{ position: 'absolute', top: '16px', right: '16px', zIndex: 1000, display: 'flex', gap: '4px', background: 'white', padding: '4px', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+        <div style={{ position: 'absolute', top: '100px', right: '16px', zIndex: 1000, display: 'flex', gap: '4px', background: 'white', padding: '4px', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
           <button 
             onClick={() => setMapStyle('osm')} 
             style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', background: mapStyle === 'osm' ? '#eff6ff' : 'transparent', color: mapStyle === 'osm' ? '#2563eb' : '#64748b', cursor: 'pointer', fontWeight: 600, fontSize: '12px', transition: 'all 0.2s' }}
@@ -456,31 +456,26 @@ const LiveMap: React.FC = () => {
           </button>
         </div>
 
-        <MapContainer center={mapCenter} zoom={13} className="map-container">
+        <MapContainer center={mapCenter} zoom={13} className={`map-container map-style-${mapStyle}`}>
           <ChangeView center={mapCenter} />
           <ResizeMap isSidebarOpen={isSidebarOpen} />
           
-          {mapStyle === 'osm' && (
-            <TileLayer
-              key="osm"
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            />
-          )}
-          {mapStyle === 'street' && (
-            <TileLayer
-              key="street"
-              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
-              attribution='Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom, 2012'
-            />
-          )}
-          {mapStyle === 'satellite' && (
-            <TileLayer
-              key="satellite"
-              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-              attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-            />
-          )}
+          <TileLayer
+            url={
+              mapStyle === 'osm'
+                ? 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+                : mapStyle === 'street'
+                ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'
+                : 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+            }
+            attribution={
+              mapStyle === 'osm'
+                ? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                : mapStyle === 'street'
+                ? 'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom, 2012'
+                : 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+            }
+          />
 
           {userLocation && (
             <Marker position={userLocation}>
@@ -667,8 +662,12 @@ const LiveMap: React.FC = () => {
               padding: '12px 24px',
               borderRadius: '16px',
               display: 'flex',
+              flexWrap: 'wrap',
+              justifyContent: 'center',
               alignItems: 'center',
-              gap: '24px',
+              gap: '16px',
+              width: '90%',
+              maxWidth: '800px',
               background: 'rgba(15, 23, 42, 0.85)',
               border: '1px solid rgba(59, 130, 246, 0.3)',
               boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
