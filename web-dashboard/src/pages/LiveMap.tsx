@@ -22,6 +22,9 @@ import {
   Calendar,
   Clock,
   Compass,
+  Camera,
+  ExternalLink,
+  Download,
 } from 'lucide-react';
 import L from 'leaflet';
 import { calculateRouteMetrics } from '../utils/travelMetrics';
@@ -98,6 +101,14 @@ const LiveMap: React.FC = () => {
   const [historyLogs, setHistoryLogs] = useState<LocationHistoryItem[]>([]);
   const [playbackStep, setPlaybackStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  // 360° Street View Modal State
+  const [streetViewModal, setStreetViewModal] = useState<{
+    isOpen: boolean;
+    name: string;
+    lat: number;
+    lng: number;
+  } | null>(null);
 
   useEffect(() => {
     const fetchLocations = async () => {
@@ -253,8 +264,38 @@ const LiveMap: React.FC = () => {
 
   const copyCoordinates = (lat: number, lng: number) => {
     navigator.clipboard.writeText(`${lat.toFixed(6)}, ${lng.toFixed(6)}`).then(() => {
-      // Flash a brief visual confirmation — handled with title tooltip
+      alert(`Copied coordinates: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
     });
+  };
+
+  const handleExportUserRouteCsv = () => {
+    if (!activeEmployee || !historyLogs || historyLogs.length === 0) {
+      alert('No location history logs available for this date.');
+      return;
+    }
+
+    const headers = ['User ID', 'Device Hardware ID', 'Recorded Date & Time', 'Latitude', 'Longitude', 'Accuracy (m)'];
+    const rows = historyLogs.map((log) => [
+      `"${activeEmployee.userId || activeEmployee.name || 'N/A'}"`,
+      `"${activeEmployee.deviceId || activeEmployee.id || 'N/A'}"`,
+      `"${new Date(log.recordedAt).toLocaleString()}"`,
+      log.lat,
+      log.lng,
+      log.accuracy ? `±${Math.round(log.accuracy)}m` : 'N/A',
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${activeEmployee.userId || 'user'}_${selectedDate}_route_history.csv`;
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }, 100);
   };
 
   const centerOnMe = () => {
@@ -379,23 +420,46 @@ const LiveMap: React.FC = () => {
                   </div>
                 )}
               </div>
-              <button
-                onClick={() => copyCoordinates(activeEmployee.lat, activeEmployee.lng)}
-                title="Copy to clipboard"
-                style={{
-                  marginTop: '8px',
-                  width: '100%',
-                  padding: '5px',
-                  fontSize: '11px',
-                  background: 'rgba(59,130,246,0.15)',
-                  border: '1px solid rgba(59,130,246,0.3)',
-                  borderRadius: '6px',
-                  color: '#93c5fd',
-                  cursor: 'pointer',
-                }}
-              >
-                📋 Copy Coordinates
-              </button>
+              <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+                <button
+                  onClick={() => copyCoordinates(activeEmployee.lat, activeEmployee.lng)}
+                  title="Copy to clipboard"
+                  style={{
+                    flex: 1,
+                    padding: '6px',
+                    fontSize: '11px',
+                    background: 'rgba(59,130,246,0.15)',
+                    border: '1px solid rgba(59,130,246,0.3)',
+                    borderRadius: '6px',
+                    color: '#93c5fd',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                  }}
+                >
+                  📋 Copy
+                </button>
+                <button
+                  onClick={() => setStreetViewModal({ isOpen: true, name: activeEmployee.name || activeEmployee.userId, lat: activeEmployee.lat, lng: activeEmployee.lng })}
+                  title="Open 360° Street View"
+                  style={{
+                    flex: 1,
+                    padding: '6px',
+                    fontSize: '11px',
+                    background: 'rgba(16,185,129,0.15)',
+                    border: '1px solid rgba(16,185,129,0.3)',
+                    borderRadius: '6px',
+                    color: '#34d399',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  <Camera size={13} /> 360° View
+                </button>
+              </div>
             </div>
           )}
 
@@ -540,23 +604,44 @@ const LiveMap: React.FC = () => {
                         )}
                       </tbody>
                     </table>
-                    <button
-                      onClick={() => copyCoordinates(emp.lat, emp.lng)}
-                      style={{
-                        marginTop: '8px',
-                        width: '100%',
-                        padding: '5px 8px',
-                        fontSize: '11px',
-                        background: '#eff6ff',
-                        border: '1px solid #bfdbfe',
-                        borderRadius: '6px',
-                        color: '#1d4ed8',
-                        cursor: 'pointer',
-                        fontWeight: 600,
-                      }}
-                    >
-                      📋 Copy Coordinates
-                    </button>
+                    <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+                      <button
+                        onClick={() => copyCoordinates(emp.lat, emp.lng)}
+                        style={{
+                          flex: 1,
+                          padding: '6px',
+                          fontSize: '11px',
+                          background: '#eff6ff',
+                          border: '1px solid #bfdbfe',
+                          borderRadius: '6px',
+                          color: '#1d4ed8',
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                        }}
+                      >
+                        📋 Copy
+                      </button>
+                      <button
+                        onClick={() => setStreetViewModal({ isOpen: true, name: emp.name || emp.userId, lat: emp.lat, lng: emp.lng })}
+                        style={{
+                          flex: 1,
+                          padding: '6px',
+                          fontSize: '11px',
+                          background: '#ecfdf5',
+                          border: '1px solid #a7f3d0',
+                          borderRadius: '6px',
+                          color: '#047857',
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px',
+                        }}
+                      >
+                        <Camera size={13} /> 360° View
+                      </button>
+                    </div>
                     <a
                       href={`https://www.google.com/maps?q=${emp.lat},${emp.lng}`}
                       target="_blank"
@@ -735,6 +820,31 @@ const LiveMap: React.FC = () => {
                 }}
               />
             </div>
+
+            {historyLogs.length > 0 && (
+              <>
+                <div style={{ height: '24px', width: '1px', background: 'rgba(255,255,255,0.1)' }}></div>
+                <button
+                  onClick={handleExportUserRouteCsv}
+                  title="Export User Location History CSV"
+                  style={{
+                    background: 'rgba(59, 130, 246, 0.2)',
+                    border: '1px solid rgba(59, 130, 246, 0.4)',
+                    color: '#60a5fa',
+                    padding: '5px 12px',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <Download size={14} /> Export Route CSV
+                </button>
+              </>
+            )}
           </div>
         )}
 
@@ -825,6 +935,115 @@ const LiveMap: React.FC = () => {
                 onChange={(e) => setPlaybackStep(parseInt(e.target.value, 10))}
                 style={{ width: '100%', cursor: 'pointer' }}
               />
+            </div>
+          </div>
+        )}
+        {/* 360° Street View Modal */}
+        {streetViewModal && streetViewModal.isOpen && (
+          <div className="modal-overlay" style={{ zIndex: 9999 }}>
+            <div
+              className="modal-content glass-panel animate-fade-in"
+              style={{
+                maxWidth: '850px',
+                width: '92%',
+                padding: '24px',
+                borderRadius: '16px',
+                background: '#0f172a',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                boxShadow: '0 20px 50px rgba(0,0,0,0.6)',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '16px',
+                }}
+              >
+                <div>
+                  <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#fff', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Camera className="text-emerald-400" size={20} />
+                    <span>360° Street View</span>
+                    <span style={{ fontSize: '12px', background: 'rgba(59,130,246,0.2)', color: '#60a5fa', padding: '2px 8px', borderRadius: '12px' }}>
+                      {streetViewModal.name}
+                    </span>
+                  </h2>
+                  <p style={{ fontSize: '12px', color: '#94a3b8', margin: '4px 0 0' }}>
+                    Interactive 360° street panorama for location coordinates ({streetViewModal.lat.toFixed(6)}°, {streetViewModal.lng.toFixed(6)}°)
+                  </p>
+                </div>
+                <button
+                  onClick={() => setStreetViewModal(null)}
+                  style={{
+                    background: 'rgba(255,255,255,0.1)',
+                    border: 'none',
+                    color: '#fff',
+                    borderRadius: '50%',
+                    width: '32px',
+                    height: '32px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div
+                style={{
+                  width: '100%',
+                  height: '450px',
+                  borderRadius: '12px',
+                  overflow: 'hidden',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  background: '#000',
+                }}
+              >
+                <iframe
+                  title="360 Street View Panorama"
+                  width="100%"
+                  height="100%"
+                  style={{ border: 0 }}
+                  loading="lazy"
+                  allowFullScreen
+                  src={`https://maps.google.com/maps?q=&layer=c&cbll=${streetViewModal.lat},${streetViewModal.lng}&cbp=11,0,0,0,0&output=svembed`}
+                ></iframe>
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginTop: '16px',
+                  flexWrap: 'wrap',
+                  gap: '12px',
+                }}
+              >
+                <span style={{ fontSize: '12px', color: '#64748b' }}>
+                  💡 Drag mouse inside panorama to look 360° around the location.
+                </span>
+                <a
+                  href={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${streetViewModal.lat},${streetViewModal.lng}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn-primary"
+                  style={{
+                    width: 'auto',
+                    padding: '8px 16px',
+                    fontSize: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    textDecoration: 'none',
+                  }}
+                >
+                  <ExternalLink size={14} /> Open in Google Maps ↗
+                </a>
+              </div>
             </div>
           </div>
         )}

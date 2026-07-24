@@ -119,6 +119,33 @@ const Employees: React.FC = () => {
     }
   };
 
+  const handleDownloadUserHistoryCsv = () => {
+    if (!historyModalUser || !historyLogs || historyLogs.length === 0) return;
+
+    const headers = ['User ID', 'Device Hardware ID', 'Recorded Date & Time', 'Latitude', 'Longitude', 'Accuracy (m)'];
+    const rows = historyLogs.map(log => [
+      `"${historyModalUser.userId || 'N/A'}"`,
+      `"${historyModalUser.deviceId || 'N/A'}"`,
+      `"${new Date(log.recordedAt).toLocaleString()}"`,
+      log.lat,
+      log.lng,
+      log.accuracy ? `±${Math.round(log.accuracy)}m` : 'N/A'
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${historyModalUser.userId}_location_history.csv`;
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }, 100);
+  };
+
   const filteredDevices = devices.filter(dev => {
     const query = searchQuery.toLowerCase();
     return (
@@ -226,11 +253,33 @@ const Employees: React.FC = () => {
             >
               <X size={20} />
             </button>
-            <div className="modal-header" style={{ marginBottom: '16px' }}>
-              <h2 style={{ marginBottom: '8px' }}>Location History</h2>
-              <p className="text-secondary" style={{ fontSize: '14px', margin: 0 }}>
-                Showing recent location pings for <span style={{ fontFamily: 'monospace', color: '#fff' }}>{historyModalUser.userId}</span>
-              </p>
+            <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h2 style={{ marginBottom: '4px' }}>Location History</h2>
+                <p className="text-secondary" style={{ fontSize: '14px', margin: 0 }}>
+                  Showing recent location pings for <span style={{ fontFamily: 'monospace', color: '#fff' }}>{historyModalUser.userId}</span>
+                </p>
+              </div>
+              {historyLogs.length > 0 && (
+                <button
+                  onClick={handleDownloadUserHistoryCsv}
+                  className="btn-primary"
+                  style={{
+                    width: 'auto',
+                    padding: '8px 14px',
+                    fontSize: '13px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    borderRadius: '8px',
+                    background: 'rgba(59, 130, 246, 0.2)',
+                    border: '1px solid rgba(59, 130, 246, 0.4)',
+                    color: '#60a5fa',
+                  }}
+                >
+                  <Download size={15} /> Download History CSV
+                </button>
+              )}
             </div>
             
             <div style={{ flex: 1, overflowY: 'auto', paddingRight: '8px' }}>
@@ -357,7 +406,7 @@ const Employees: React.FC = () => {
                       <button
                         className="icon-btn text-red-400"
                         title="Delete Device"
-                        onClick={() => handleDeleteDevice(dev.id)}
+                        onClick={() => handleDeleteDevice(dev.deviceId)}
                       >
                         <Trash2 size={16} />
                       </button>
