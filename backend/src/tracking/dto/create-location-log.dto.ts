@@ -21,6 +21,14 @@ export class CreateLocationLogDto {
   @IsOptional()
   accuracy?: number;
 
+  @IsString()
+  @IsOptional()
+  address?: string;
+
+  @IsNumber()
+  @IsOptional()
+  intervalMinutes?: number;
+
   @IsNumber()
   @IsNotEmpty()
   timestamp: number;

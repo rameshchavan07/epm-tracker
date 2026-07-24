@@ -38,6 +38,8 @@ data class LocationBatchRequest(
     val accuracy: Float? = null,
     val speed: Float? = null,
     val batteryLevel: Int? = null,
+    val address: String? = null,
+    val intervalMinutes: Int? = null,
     val timestamp: Long
 )
 

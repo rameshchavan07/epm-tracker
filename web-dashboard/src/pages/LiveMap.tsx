@@ -71,6 +71,8 @@ interface LocationHistoryItem {
   lng: number;
   accuracy?: number;
   speed?: number;
+  address?: string;
+  intervalMinutes?: number;
   recordedAt: string;
 }
 
@@ -411,6 +413,20 @@ const LiveMap: React.FC = () => {
                     {(activeEmployee.lng as number).toFixed(6)}°
                   </span>
                 </div>
+                {activeEmployee.address && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '4px', paddingTop: '4px', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
+                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>📍 Location Address</span>
+                    <span style={{ fontSize: '12px', color: '#e2e8f0', fontWeight: 500, lineHeight: '1.3' }}>
+                      {activeEmployee.address}
+                    </span>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>Capture Latency</span>
+                  <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 6px', borderRadius: '6px', background: 'rgba(59, 130, 246, 0.2)', color: '#60a5fa' }}>
+                    ⚡ {activeEmployee.intervalMinutes ?? 2} min interval
+                  </span>
+                </div>
                 {activeEmployee.recordedAt && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
                     <span style={{ fontSize: '11px', color: '#94a3b8' }}>Last seen</span>
@@ -588,6 +604,16 @@ const LiveMap: React.FC = () => {
                           <td style={{ color: '#64748b', paddingBottom: '3px', paddingRight: '8px' }}>Longitude</td>
                           <td style={{ fontWeight: 700, fontFamily: 'monospace', color: '#1d4ed8' }}>{(emp.lng as number).toFixed(6)}°</td>
                         </tr>
+                        {emp.address && (
+                          <tr>
+                            <td style={{ color: '#64748b', paddingBottom: '3px', paddingRight: '8px', verticalAlign: 'top' }}>Address</td>
+                            <td style={{ fontWeight: 500, fontSize: '11px', color: '#334155' }}>{emp.address}</td>
+                          </tr>
+                        )}
+                        <tr>
+                          <td style={{ color: '#64748b', paddingBottom: '3px', paddingRight: '8px' }}>Latency Mode</td>
+                          <td style={{ fontWeight: 600, color: '#2563eb' }}>⚡ {emp.intervalMinutes ?? 2} min interval</td>
+                        </tr>
                         <tr>
                           <td style={{ color: '#64748b', paddingBottom: '3px', paddingRight: '8px' }}>Accuracy</td>
                           <td style={{ fontWeight: 600 }}>±{emp.accuracy != null ? `${Math.round(emp.accuracy)} m` : 'N/A'}</td>
@@ -701,6 +727,16 @@ const LiveMap: React.FC = () => {
                           <tr>
                             <td style={{ color: '#64748b', paddingBottom: '3px', paddingRight: '8px' }}>Longitude</td>
                             <td style={{ fontWeight: 700, fontFamily: 'monospace', color: '#1d4ed8' }}>{log.lng.toFixed(6)}°</td>
+                          </tr>
+                          {log.address && (
+                            <tr>
+                              <td style={{ color: '#64748b', paddingBottom: '3px', paddingRight: '8px', verticalAlign: 'top' }}>Address</td>
+                              <td style={{ fontWeight: 500, fontSize: '11px', color: '#334155' }}>{log.address}</td>
+                            </tr>
+                          )}
+                          <tr>
+                            <td style={{ color: '#64748b', paddingBottom: '3px', paddingRight: '8px' }}>Latency Mode</td>
+                            <td style={{ fontWeight: 600, color: '#2563eb' }}>⚡ {log.intervalMinutes ?? 2} min interval</td>
                           </tr>
                           <tr>
                             <td style={{ color: '#64748b', paddingBottom: '3px', paddingRight: '8px' }}>Time</td>

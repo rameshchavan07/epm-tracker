@@ -12,6 +12,8 @@ data class LocationEntity(
     val latitude: Double,
     val longitude: Double,
     val accuracy: Float,
+    val address: String? = null,
+    val intervalMinutes: Int? = null,
     val timestamp: Long, // Epoch milliseconds
     val isSynced: Boolean = false
 )

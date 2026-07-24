@@ -34,8 +34,10 @@ model LocationLog {
   deviceId     String
   latitude     Float
   longitude    Float
-  accuracy     Float?
-  recordedAt   DateTime   @default(now())
+  accuracy        Float?
+  address         String?
+  intervalMinutes Int?
+  recordedAt      DateTime   @default(now())
 
   mobileUser   MobileUser @relation(fields: [deviceId], references: [deviceId], onDelete: Cascade)
 

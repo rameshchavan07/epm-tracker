@@ -34,7 +34,9 @@ class SyncWorker(
                     latitude  = loc.latitude,
                     longitude = loc.longitude,
                     accuracy  = loc.accuracy,
-                    timestamp = loc.timestamp
+                    address         = loc.address,
+                    intervalMinutes = loc.intervalMinutes,
+                    timestamp       = loc.timestamp
                 )
             }
 

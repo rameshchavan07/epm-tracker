@@ -104,17 +104,33 @@ class TrackingService : Service() {
                 val accuracy = location.accuracy
                 val timestamp = location.time
 
+                // Resolve location name / address using Geocoder
+                val addressName = try {
+                    val geocoder = android.location.Geocoder(applicationContext, java.util.Locale.getDefault())
+                    val addresses = geocoder.getFromLocation(lat, lng, 1)
+                    if (!addresses.isNullOrEmpty()) {
+                        val addr = addresses[0]
+                        addr.getAddressLine(0) ?: "${addr.locality ?: ""}, ${addr.adminArea ?: ""}".trim(',', ' ')
+                    } else null
+                } catch (e: Exception) {
+                    null
+                }
+
+                val currentIntervalMinutes = (trackingInterval / 60000L).toInt().coerceAtLeast(1)
+
                 // 1. Persist to local Room DB (survives offline / app kill)
                 if (userId != null) {
                     db.locationDao().insertLocation(
                         LocationEntity(
-                            userId   = userId,
-                            deviceId = deviceId,
-                            latitude  = lat,
-                            longitude = lng,
-                            accuracy  = accuracy,
-                            timestamp = timestamp,
-                            isSynced  = false
+                            userId          = userId,
+                            deviceId        = deviceId,
+                            latitude         = lat,
+                            longitude        = lng,
+                            accuracy         = accuracy,
+                            address          = addressName,
+                            intervalMinutes  = currentIntervalMinutes,
+                            timestamp        = timestamp,
+                            isSynced         = false
                         )
                     )
 
@@ -126,12 +142,14 @@ class TrackingService : Service() {
 
                             val batchRequest = unsynced.map { loc ->
                                 LocationBatchRequest(
-                                    deviceId     = loc.deviceId.ifEmpty { deviceId },
-                                    mobileUserId = loc.userId,
-                                    latitude     = loc.latitude,
-                                    longitude    = loc.longitude,
-                                    accuracy     = loc.accuracy,
-                                    timestamp    = loc.timestamp
+                                    deviceId        = loc.deviceId.ifEmpty { deviceId },
+                                    mobileUserId    = loc.userId,
+                                    latitude        = loc.latitude,
+                                    longitude       = loc.longitude,
+                                    accuracy        = loc.accuracy,
+                                    address         = loc.address,
+                                    intervalMinutes = loc.intervalMinutes ?: currentIntervalMinutes,
+                                    timestamp       = loc.timestamp
                                 )
                             }
 
@@ -149,8 +167,9 @@ class TrackingService : Service() {
                     }
                 }
 
-                // 3. Update notification with live coordinates
-                val updatedNotification = notification.setContentText("📍 ${"%.5f".format(lat)}, ${"%.5f".format(lng)}")
+                // 3. Update notification with live address / coordinates
+                val displayText = if (!addressName.isNullOrBlank()) "📍 $addressName" else "📍 ${"%.5f".format(lat)}, ${"%.5f".format(lng)}"
+                val updatedNotification = notification.setContentText(displayText)
                 notificationManager.notify(1, updatedNotification.build())
             }
             .launchIn(serviceScope)

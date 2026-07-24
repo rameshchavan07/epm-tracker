@@ -9,7 +9,7 @@ import com.epm.tracking.data.local.dao.LocationDao
 import com.epm.tracking.data.local.entity.ConfigEntity
 import com.epm.tracking.data.local.entity.LocationEntity
 
-@Database(entities = [ConfigEntity::class, LocationEntity::class], version = 1, exportSchema = false)
+@Database(entities = [ConfigEntity::class, LocationEntity::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun configDao(): ConfigDao
@@ -25,7 +25,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "epm_tracking_db"
-                ).build()
+                ).fallbackToDestructiveMigration().build()
                 INSTANCE = instance
                 instance
             }

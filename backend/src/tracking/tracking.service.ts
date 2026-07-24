@@ -11,6 +11,8 @@ export interface LocationHistoryItem {
   lat: number;
   lng: number;
   accuracy: number | null;
+  address?: string | null;
+  intervalMinutes?: number | null;
   recordedAt: Date;
 }
 
@@ -22,6 +24,8 @@ export interface LatestLocationItem {
   status: string;
   lat: number | null;
   lng: number | null;
+  address?: string | null;
+  intervalMinutes?: number | null;
   battery: number;
   recordedAt: Date | null;
 }
@@ -67,6 +71,22 @@ export class TrackingService {
     return candidate;
   }
 
+  private async reverseGeocodeOSM(lat: number, lng: number): Promise<string | null> {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+        { headers: { 'User-Agent': 'EPM-Tracker/1.0' } }
+      );
+      if (response.ok) {
+        const data: any = await response.json();
+        return data.display_name || null;
+      }
+    } catch {
+      // Ignore network errors or rate limits for OSM fallback
+    }
+    return null;
+  }
+
   async processBatch(locations: CreateLocationLogDto[]) {
     if (!locations || locations.length === 0) {
       return { success: true, count: 0 };
@@ -77,6 +97,11 @@ export class TrackingService {
     for (const loc of locations) {
       try {
         const recordedAt = new Date(loc.timestamp);
+        let address = loc.address || null;
+
+        if (!address) {
+          address = await this.reverseGeocodeOSM(loc.latitude, loc.longitude);
+        }
 
         // 1. Find or create MobileUser with sequential User ID (USR-1001, USR-1002...)
         let mobileUser = await this.prisma.mobileUser.findUnique({
@@ -102,14 +127,17 @@ export class TrackingService {
         }
 
         // 2. Insert LocationLog
+        const intervalMinutes = loc.intervalMinutes ?? 2;
         await this.prisma.locationLog.create({
           data: {
             deviceId: loc.deviceId,
             latitude: loc.latitude,
             longitude: loc.longitude,
             accuracy: loc.accuracy ?? null,
+            ...(address ? { address } : {}),
+            intervalMinutes,
             recordedAt,
-          },
+          } as any,
         });
 
         processedCount++;
@@ -122,6 +150,8 @@ export class TrackingService {
           status: 'Active',
           lat: loc.latitude,
           lng: loc.longitude,
+          address,
+          intervalMinutes,
           battery: 100,
           recordedAt,
         });
@@ -172,12 +202,14 @@ export class TrackingService {
       take: limit,
     });
 
-    return logs.map((log: LocationLog) => ({
+    return logs.map((log: any) => ({
       id: log.id,
       deviceId: log.deviceId,
       lat: log.latitude,
       lng: log.longitude,
       accuracy: log.accuracy,
+      address: log.address ?? null,
+      intervalMinutes: log.intervalMinutes ?? 2,
       recordedAt: log.recordedAt,
     }));
   }
@@ -195,7 +227,7 @@ export class TrackingService {
     return mobileUsers
       .filter((user) => user.locationLogs.length > 0)
       .map((user) => {
-        const latestLog = user.locationLogs[0];
+        const latestLog: any = user.locationLogs[0];
         return {
           id: user.deviceId,
           deviceId: user.deviceId,
@@ -204,6 +236,8 @@ export class TrackingService {
           status: user.status ? 'Active' : 'Offline',
           lat: latestLog.latitude,
           lng: latestLog.longitude,
+          address: latestLog.address ?? null,
+          intervalMinutes: latestLog.intervalMinutes ?? 2,
           battery: 90,
           recordedAt: latestLog.recordedAt,
         };
