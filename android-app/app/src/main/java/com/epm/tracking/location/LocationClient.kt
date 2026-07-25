@@ -34,7 +34,10 @@ class DefaultLocationClient(
                 throw LocationClient.LocationException("GPS is disabled")
             }
 
-            val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, interval).build()
+            val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, interval)
+                .setMinUpdateIntervalMillis(interval)
+                .setMinUpdateDistanceMeters(5f)
+                .build()
 
             val locationCallback = object : LocationCallback() {
                 override fun onLocationResult(result: LocationResult) {

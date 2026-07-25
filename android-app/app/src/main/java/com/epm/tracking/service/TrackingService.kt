@@ -31,6 +31,7 @@ class TrackingService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var locationClient: LocationClient
+    private var lastSavedTimestamp: Long = 0L
 
     // How often to request a location fix (2 minutes)
     private val trackingInterval = 120000L
@@ -99,6 +100,15 @@ class TrackingService : Service() {
         locationClient.getLocationUpdates(trackingInterval)
             .catch { e -> e.printStackTrace() }
             .onEach { location ->
+                val activeInterval = sessionManager.getTrackingInterval()
+                val now = System.currentTimeMillis()
+
+                // Throttle updates that arrive faster than the active interval (with 5-sec buffer)
+                if (lastSavedTimestamp > 0 && (now - lastSavedTimestamp) < (activeInterval - 5000L)) {
+                    return@onEach
+                }
+                lastSavedTimestamp = now
+
                 val lat = location.latitude
                 val lng = location.longitude
                 val accuracy = location.accuracy
@@ -107,6 +117,7 @@ class TrackingService : Service() {
                 // Resolve location name / address using Geocoder
                 val addressName = try {
                     val geocoder = android.location.Geocoder(applicationContext, java.util.Locale.getDefault())
+                    @Suppress("DEPRECATION")
                     val addresses = geocoder.getFromLocation(lat, lng, 1)
                     if (!addresses.isNullOrEmpty()) {
                         val addr = addresses[0]

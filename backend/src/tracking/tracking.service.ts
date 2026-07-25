@@ -49,7 +49,8 @@ export class TrackingService {
   ) {}
 
   async getTrackingConfig() {
-    const intervalMinutes = 2;
+    const envVal = process.env.TRACKING_INTERVAL_MINUTES;
+    const intervalMinutes = envVal ? Math.max(1, parseInt(envVal, 10)) : 2;
     return {
       trackingIntervalMinutes: intervalMinutes,
       trackingIntervalMs: intervalMinutes * 60 * 1000,

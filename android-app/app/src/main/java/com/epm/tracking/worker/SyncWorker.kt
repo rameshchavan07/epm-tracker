@@ -16,8 +16,6 @@ class SyncWorker(
 
     override suspend fun doWork(): Result {
         val database = AppDatabase.getDatabase(applicationContext)
-        val sessionManager = SessionManager(applicationContext)
-
         val deviceId = Settings.Secure.getString(applicationContext.contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
 
         return try {
