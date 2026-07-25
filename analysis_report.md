@@ -7,7 +7,7 @@ The **EPM Tracker** project has completed all core architecture phases across it
 
 ## 1. What Has Been Developed (Accomplished Workflow)
 
-### A. NestJS Backend API & Database Layer (`backend`)
+### A. NestJS Backend API & Database La  u4iḥ`backend`)
 - **Database Architecture**: Prisma ORM v5 connected to Neon PostgreSQL database. Fully synchronized models for `Company`, `User`, and `LocationLog`.
 - **Database Seeding**: Created `prisma/seed.ts` to populate default company (**Acme Corp**), admin user (`admin@epm.com` / `password123`), employee accounts (Aarav, Priya, Rahul), and initial location logs across Mumbai, Delhi, and Bangalore.
 - **14 REST API Endpoints**:

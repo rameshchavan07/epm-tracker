@@ -36,7 +36,9 @@ class DefaultLocationClient(
 
             val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, interval)
                 .setMinUpdateIntervalMillis(interval)
-                .setMinUpdateDistanceMeters(5f)
+                .setMinUpdateDistanceMeters(0f)
+                .setGranularity(Granularity.GRANULARITY_FINE)
+                .setWaitForAccurateLocation(true)
                 .build()
 
             val locationCallback = object : LocationCallback() {

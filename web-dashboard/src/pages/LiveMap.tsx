@@ -175,7 +175,7 @@ const LiveMap: React.FC = () => {
       clearInterval(interval);
       if (socket) socket.disconnect();
     };
-  }, [activeEmployee]);
+  }, []);
 
   // Get user's current location on mount
   useEffect(() => {
@@ -276,11 +276,12 @@ const LiveMap: React.FC = () => {
       return;
     }
 
-    const headers = ['User ID', 'Device Hardware ID', 'Recorded Date & Time', 'Latitude', 'Longitude', 'Accuracy (m)'];
+    const headers = ['User ID', 'Device Hardware ID', 'Recorded Date & Time', 'Location Address', 'Latitude', 'Longitude', 'Accuracy (m)'];
     const rows = historyLogs.map((log) => [
       `"${activeEmployee.userId || activeEmployee.name || 'N/A'}"`,
       `"${activeEmployee.deviceId || activeEmployee.id || 'N/A'}"`,
       `"${new Date(log.recordedAt).toLocaleString()}"`,
+      `"${(log.address || 'N/A').toString().replace(/"/g, '""')}"`,
       log.lat,
       log.lng,
       log.accuracy ? `±${Math.round(log.accuracy)}m` : 'N/A',

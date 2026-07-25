@@ -9,6 +9,7 @@ export interface ExportableEmployeeRecord {
   recordedAt?: string;
   lat?: number;
   lng?: number;
+  address?: string | null;
 }
 
 export const exportTeamAttendanceCsv = (
@@ -20,13 +21,14 @@ export const exportTeamAttendanceCsv = (
     return;
   }
 
-  const headers = ['User ID / Name', 'Device Hardware ID', 'Role', 'Status', 'Last Latitude', 'Last Longitude', 'Last Recorded Time'];
+  const headers = ['User ID / Name', 'Device Hardware ID', 'Role', 'Status', 'Location Address', 'Last Latitude', 'Last Longitude', 'Last Recorded Time'];
 
   const rows = records.map((emp) => [
     `"${(emp.userId || emp.name || emp.id || 'Field Agent').toString().replace(/"/g, '""')}"`,
     `"${(emp.deviceId || emp.id || 'N/A').toString().replace(/"/g, '""')}"`,
     `"${(emp.role || 'Field Agent').toString().replace(/"/g, '""')}"`,
     `"${(emp.status || 'Offline').toString().replace(/"/g, '""')}"`,
+    `"${(emp.address || 'N/A').toString().replace(/"/g, '""')}"`,
     emp.lat !== undefined && emp.lat !== null ? emp.lat : 'N/A',
     emp.lng !== undefined && emp.lng !== null ? emp.lng : 'N/A',
     emp.recordedAt ? `"${new Date(emp.recordedAt).toLocaleString()}"` : `"${new Date().toLocaleString()}"`,

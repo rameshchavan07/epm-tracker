@@ -9,6 +9,9 @@ interface MobileDevice {
   status: boolean;
   lastLocationAt?: string;
   createdAt?: string;
+  address?: string | null;
+  lat?: number | null;
+  lng?: number | null;
   _count?: {
     locationLogs: number;
   };
@@ -20,6 +23,7 @@ interface LocationHistoryItem {
   lng: number;
   recordedAt: string;
   accuracy?: number;
+  address?: string | null;
 }
 
 const Employees: React.FC = () => {
@@ -57,11 +61,11 @@ const Employees: React.FC = () => {
       return;
     }
 
-    const headers = ['User ID', 'Device Hardware ID (ANDROID_ID)', 'Status', 'Last Ping'];
+    const headers = ['User ID', 'Device Hardware ID (ANDROID_ID)', 'Status', 'Last Address', 'Last Latitude', 'Last Longitude', 'Last Ping'];
     const csvContent = '\uFEFF' + [
       headers.join(','),
       ...devices.map(dev =>
-        `"${dev.userId || 'N/A'}","${dev.deviceId || 'N/A'}","${dev.status ? 'Active' : 'Offline'}","${dev.lastLocationAt ? new Date(dev.lastLocationAt).toLocaleString() : 'Never'}"`
+        `"${(dev.userId || 'N/A').replace(/"/g, '""')}","${(dev.deviceId || 'N/A').replace(/"/g, '""')}","${dev.status ? 'Active' : 'Offline'}","${(dev.address || 'N/A').replace(/"/g, '""')}",${dev.lat ?? 'N/A'},${dev.lng ?? 'N/A'},"${dev.lastLocationAt ? new Date(dev.lastLocationAt).toLocaleString() : 'Never'}"`
       )
     ].join('\n');
 
@@ -122,11 +126,12 @@ const Employees: React.FC = () => {
   const handleDownloadUserHistoryCsv = () => {
     if (!historyModalUser || !historyLogs || historyLogs.length === 0) return;
 
-    const headers = ['User ID', 'Device Hardware ID', 'Recorded Date & Time', 'Latitude', 'Longitude', 'Accuracy (m)'];
+    const headers = ['User ID', 'Device Hardware ID', 'Recorded Date & Time', 'Location Address', 'Latitude', 'Longitude', 'Accuracy (m)'];
     const rows = historyLogs.map(log => [
-      `"${historyModalUser.userId || 'N/A'}"`,
-      `"${historyModalUser.deviceId || 'N/A'}"`,
+      `"${(historyModalUser.userId || 'N/A').replace(/"/g, '""')}"`,
+      `"${(historyModalUser.deviceId || 'N/A').replace(/"/g, '""')}"`,
       `"${new Date(log.recordedAt).toLocaleString()}"`,
+      `"${(log.address || 'N/A').replace(/"/g, '""')}"`,
       log.lat,
       log.lng,
       log.accuracy ? `±${Math.round(log.accuracy)}m` : 'N/A'
