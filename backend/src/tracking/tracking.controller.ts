@@ -56,6 +56,12 @@ export class TrackingController {
     return this.trackingService.getTrackingConfig();
   }
 
+  @Post('config')
+  @HttpCode(HttpStatus.OK)
+  async updateTrackingConfig(@Body() body: { trackingIntervalMinutes: number }) {
+    return this.trackingService.updateTrackingConfig(body.trackingIntervalMinutes);
+  }
+
   @Get('analytics')
   async getAnalytics() {
     return this.trackingService.getAnalytics();

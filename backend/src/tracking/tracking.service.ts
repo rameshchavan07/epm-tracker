@@ -48,13 +48,20 @@ export class TrackingService {
     private trackingGateway: TrackingGateway,
   ) {}
 
+  private activeTrackingIntervalMinutes = parseInt(process.env.TRACKING_INTERVAL_MINUTES || '2', 10);
+
   async getTrackingConfig() {
-    const envVal = process.env.TRACKING_INTERVAL_MINUTES;
-    const intervalMinutes = envVal ? Math.max(1, parseInt(envVal, 10)) : 2;
     return {
-      trackingIntervalMinutes: intervalMinutes,
-      trackingIntervalMs: intervalMinutes * 60 * 1000,
+      trackingIntervalMinutes: this.activeTrackingIntervalMinutes,
+      trackingIntervalMs: this.activeTrackingIntervalMinutes * 60 * 1000,
     };
+  }
+
+  async updateTrackingConfig(minutes: number) {
+    const validMinutes = Math.max(1, Math.min(60, minutes));
+    this.activeTrackingIntervalMinutes = validMinutes;
+    this.logger.log(`Updated global tracking frequency to ${validMinutes} minutes`);
+    return this.getTrackingConfig();
   }
 
   private async generateSequentialUserId(): Promise<string> {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Smartphone, Search, Edit, Trash2, Download, Navigation, X, Check } from 'lucide-react';
+import { Smartphone, Search, Edit, Trash2, Download, Navigation, X, Check, Clock } from 'lucide-react';
 import apiClient from '../api/client';
 
 interface MobileDevice {
@@ -40,6 +40,41 @@ const Employees: React.FC = () => {
   const [historyLogs, setHistoryLogs] = useState<LocationHistoryItem[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
+  // Global Tracking Interval Config State
+  const [trackingInterval, setTrackingInterval] = useState(2);
+  const [savingInterval, setSavingInterval] = useState(false);
+  const [intervalSavedMsg, setIntervalSavedMsg] = useState('');
+
+  const fetchTrackingConfig = async () => {
+    try {
+      const res = await apiClient.get('/tracking/config');
+      if (res.data && res.data.trackingIntervalMinutes) {
+        setTrackingInterval(res.data.trackingIntervalMinutes);
+      }
+    } catch (err) {
+      console.error('Failed to fetch tracking config', err);
+    }
+  };
+
+  const handleSaveTrackingInterval = async (newInterval: number) => {
+    setSavingInterval(true);
+    setIntervalSavedMsg('');
+    try {
+      const res = await apiClient.post('/tracking/config', {
+        trackingIntervalMinutes: newInterval,
+      });
+      if (res.data && res.data.trackingIntervalMinutes) {
+        setTrackingInterval(res.data.trackingIntervalMinutes);
+        setIntervalSavedMsg('Frequency updated!');
+        setTimeout(() => setIntervalSavedMsg(''), 3000);
+      }
+    } catch (err) {
+      console.error('Failed to update tracking frequency', err);
+    } finally {
+      setSavingInterval(false);
+    }
+  };
+
   const fetchDevices = async () => {
     try {
       const response = await apiClient.get('/mobile-users');
@@ -53,6 +88,7 @@ const Employees: React.FC = () => {
 
   useEffect(() => {
     fetchDevices();
+    fetchTrackingConfig();
   }, []);
 
   const handleExportCSV = () => {
@@ -172,6 +208,44 @@ const Employees: React.FC = () => {
           </button>
         </div>
       </header>
+
+      {/* Global Tracking Interval Control Card */}
+      <div className="glass-card" style={{ padding: '16px 24px', marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <Clock size={22} style={{ color: '#6366f1' }} />
+          <div>
+            <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: '#fff' }}>Global Data Collection Frequency</h4>
+            <p style={{ margin: 0, fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)' }}>Configure how frequently Android field devices capture and push location pings.</p>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <select
+            value={trackingInterval}
+            onChange={(e) => handleSaveTrackingInterval(Number(e.target.value))}
+            disabled={savingInterval}
+            style={{
+              padding: '8px 14px',
+              borderRadius: '8px',
+              background: '#1e293b',
+              color: '#fff',
+              border: '1px solid rgba(255,255,255,0.2)',
+              fontSize: '0.9rem',
+              fontWeight: 500,
+              cursor: 'pointer',
+              outline: 'none'
+            }}
+          >
+            <option value={1}>⚡ 1 Minute (High Precision)</option>
+            <option value={2}>⚡ 2 Minutes (Standard)</option>
+            <option value={5}>⚡ 5 Minutes (Balanced)</option>
+            <option value={10}>⚡ 10 Minutes (Battery Saver)</option>
+            <option value={15}>⚡ 15 Minutes (Low Power)</option>
+          </select>
+          {intervalSavedMsg && (
+            <span style={{ fontSize: '0.85rem', color: '#10b981', fontWeight: 600, animation: 'fadeIn 0.3s' }}>✓ {intervalSavedMsg}</span>
+          )}
+        </div>
+      </div>
 
       {/* Device Details Modal */}
       {selectedDevice && (
