@@ -94,11 +94,16 @@ class TrackingService : Service() {
         val trackingInterval = sessionManager.getTrackingInterval()
 
         // Resolve the logged-in user's real ID and device ID
-        val userId   = sessionManager.getUserId()
         val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
 
         locationClient.getLocationUpdates(trackingInterval)
-            .catch { e -> e.printStackTrace() }
+            .catch { e ->
+                e.printStackTrace()
+                if (e is com.epm.tracking.location.LocationClient.LocationException) {
+                    val updatedNotification = notification.setContentText("⚠️ ${e.message ?: "GPS issue detected"}")
+                    notificationManager.notify(1, updatedNotification.build())
+                }
+            }
             .onEach { location ->
                 val activeInterval = sessionManager.getTrackingInterval()
                 val now = System.currentTimeMillis()
@@ -128,22 +133,22 @@ class TrackingService : Service() {
                 }
 
                 val currentIntervalMinutes = (trackingInterval / 60000L).toInt().coerceAtLeast(1)
+                val currentUserId = sessionManager.getUserId() ?: "USR-${deviceId.takeLast(6).uppercase()}"
 
                 // 1. Persist to local Room DB (survives offline / app kill)
-                if (userId != null) {
-                    db.locationDao().insertLocation(
-                        LocationEntity(
-                            userId          = userId,
-                            deviceId        = deviceId,
-                            latitude         = lat,
-                            longitude        = lng,
-                            accuracy         = accuracy,
-                            address          = addressName,
-                            intervalMinutes  = currentIntervalMinutes,
-                            timestamp        = timestamp,
-                            isSynced         = false
-                        )
+                db.locationDao().insertLocation(
+                    LocationEntity(
+                        userId          = currentUserId,
+                        deviceId        = deviceId,
+                        latitude        = lat,
+                        longitude       = lng,
+                        accuracy        = accuracy,
+                        address         = addressName,
+                        intervalMinutes = currentIntervalMinutes,
+                        timestamp       = timestamp,
+                        isSynced        = false
                     )
+                )
 
                     // 2. Immediately try to push to the backend server
                     serviceScope.launch {
@@ -176,7 +181,6 @@ class TrackingService : Service() {
                             e.printStackTrace()
                         }
                     }
-                }
 
                 // 3. Update notification with live address / coordinates
                 val displayText = if (!addressName.isNullOrBlank()) "📍 $addressName" else "📍 ${"%.5f".format(lat)}, ${"%.5f".format(lng)}"

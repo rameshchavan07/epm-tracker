@@ -336,6 +336,25 @@ fun DashboardScreen(
                             }
                             return@Button
                         }
+
+                        // Guard: check if GPS / Location Services are enabled on device
+                        val locationManager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as android.location.LocationManager
+                        val isGpsEnabled = androidx.core.location.LocationManagerCompat.isLocationEnabled(locationManager) ||
+                                           locationManager.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER) ||
+                                           locationManager.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER)
+
+                        if (!isGpsEnabled) {
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar(
+                                    message = "GPS is disabled on your device. Please turn on Location in Settings.",
+                                    duration = SnackbarDuration.Long
+                                )
+                            }
+                            try {
+                                context.startActivity(Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                            } catch (_: Exception) {}
+                            return@Button
+                        }
                     }
 
                     val intent = Intent(context, TrackingService::class.java).apply {

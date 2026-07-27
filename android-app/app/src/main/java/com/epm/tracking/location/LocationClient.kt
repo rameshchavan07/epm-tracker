@@ -28,17 +28,26 @@ class DefaultLocationClient(
             }
 
             val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-            val isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
-            val isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
-            if (!isGpsEnabled && !isNetworkEnabled) {
+            val isLocationEnabled = androidx.core.location.LocationManagerCompat.isLocationEnabled(locationManager) ||
+                                   locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+                                   locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+
+            if (!isLocationEnabled) {
                 throw LocationClient.LocationException("GPS is disabled")
             }
 
+            // Immediately emit last known location if available
+            client.lastLocation.addOnSuccessListener { lastLoc ->
+                if (lastLoc != null) {
+                    trySend(lastLoc)
+                }
+            }
+
             val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, interval)
-                .setMinUpdateIntervalMillis(interval)
+                .setMinUpdateIntervalMillis(2000L)
                 .setMinUpdateDistanceMeters(0f)
                 .setGranularity(Granularity.GRANULARITY_FINE)
-                .setWaitForAccurateLocation(true)
+                .setWaitForAccurateLocation(false)
                 .build()
 
             val locationCallback = object : LocationCallback() {
