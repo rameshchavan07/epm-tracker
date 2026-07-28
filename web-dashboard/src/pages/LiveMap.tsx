@@ -8,6 +8,7 @@ import {
   Popup,
   Polyline,
   CircleMarker,
+  Circle,
   useMap,
 } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -39,6 +40,40 @@ L.Icon.Default.mergeOptions({
   shadowUrl:
     'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
+
+// Helper function: Ramer-Douglas-Peucker (RDP) algorithm for polyline route smoothing
+function simplifyPolyline(points: [number, number][], epsilon: number = 0.00003): [number, number][] {
+  if (points.length <= 2) return points;
+  let dmax = 0;
+  let index = 0;
+  const end = points.length - 1;
+  const p1 = points[0];
+  const p2 = points[end];
+
+  for (let i = 1; i < end; i++) {
+    const d = perpendicularDistance(points[i], p1, p2);
+    if (d > dmax) {
+      index = i;
+      dmax = d;
+    }
+  }
+
+  if (dmax > epsilon) {
+    const recResults1 = simplifyPolyline(points.slice(0, index + 1), epsilon);
+    const recResults2 = simplifyPolyline(points.slice(index), epsilon);
+    return recResults1.slice(0, recResults1.length - 1).concat(recResults2);
+  } else {
+    return [p1, p2];
+  }
+}
+
+function perpendicularDistance(p: [number, number], p1: [number, number], p2: [number, number]): number {
+  const dx = p2[0] - p1[0];
+  const dy = p2[1] - p1[1];
+  if (dx === 0 && dy === 0) return Math.hypot(p[0] - p1[0], p[1] - p1[1]);
+  const norm = Math.hypot(dx, dy);
+  return Math.abs(dy * p[0] - dx * p[1] + p2[0] * p1[1] - p2[1] * p1[0]) / norm;
+}
 
 // Component to dynamically change map center
 const ChangeView: React.FC<{ center: [number, number]; zoom?: number }> = ({
@@ -307,9 +342,12 @@ const LiveMap: React.FC = () => {
     }
   };
 
-  const historyPositions: [number, number][] = historyLogs
+  const rawHistoryPositions: [number, number][] = historyLogs
     .slice(0, playbackStep + 1)
     .map((log) => [log.lat, log.lng]);
+
+  // Smooth out polylines to remove micro-jitter using RDP algorithm
+  const historyPositions: [number, number][] = simplifyPolyline(rawHistoryPositions);
 
   const currentStepLog = historyLogs[playbackStep];
 
@@ -573,7 +611,21 @@ const LiveMap: React.FC = () => {
             employees
               .filter((emp) => emp.lat != null && emp.lng != null)
               .map((emp) => (
-              <Marker key={emp.id} position={[emp.lat, emp.lng]}>
+              <React.Fragment key={emp.id}>
+                {emp.accuracy != null && emp.accuracy > 0 && (
+                  <Circle
+                    center={[emp.lat, emp.lng]}
+                    radius={emp.accuracy}
+                    pathOptions={{
+                      color: '#2563eb',
+                      fillColor: '#3b82f6',
+                      fillOpacity: 0.15,
+                      weight: 1.5,
+                      dashArray: '4, 4',
+                    }}
+                  />
+                )}
+                <Marker position={[emp.lat, emp.lng]}>
                 <Popup maxWidth={260}>
                   <div className="popup-content" style={{ minWidth: '220px' }}>
                     <div style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '6px', marginBottom: '8px' }}>
@@ -688,6 +740,7 @@ const LiveMap: React.FC = () => {
                   </div>
                 </Popup>
               </Marker>
+              </React.Fragment>
             ))}
 
           {/* Render Breadcrumb Route Trail */}
@@ -704,16 +757,28 @@ const LiveMap: React.FC = () => {
               )}
 
               {historyLogs.slice(0, playbackStep + 1).map((log, index) => (
-                <CircleMarker
-                  key={log.id || index}
-                  center={[log.lat, log.lng]}
-                  radius={index === playbackStep ? 10 : 5}
-                  pathOptions={{
-                    color: index === playbackStep ? '#ef4444' : '#3b82f6',
-                    fillColor: index === playbackStep ? '#ef4444' : '#60a5fa',
-                    fillOpacity: index === playbackStep ? 1 : 0.7,
-                  }}
-                >
+                <React.Fragment key={log.id || index}>
+                  {log.accuracy != null && log.accuracy > 0 && (
+                    <Circle
+                      center={[log.lat, log.lng]}
+                      radius={log.accuracy}
+                      pathOptions={{
+                        color: index === playbackStep ? '#ef4444' : '#3b82f6',
+                        fillColor: index === playbackStep ? '#f87171' : '#60a5fa',
+                        fillOpacity: 0.12,
+                        weight: 1,
+                      }}
+                    />
+                  )}
+                  <CircleMarker
+                    center={[log.lat, log.lng]}
+                    radius={index === playbackStep ? 10 : 5}
+                    pathOptions={{
+                      color: index === playbackStep ? '#ef4444' : '#3b82f6',
+                      fillColor: index === playbackStep ? '#ef4444' : '#60a5fa',
+                      fillOpacity: index === playbackStep ? 1 : 0.7,
+                    }}
+                  >
                   <Popup maxWidth={240}>
                     <div className="popup-content" style={{ minWidth: '200px' }}>
                       <strong style={{ fontSize: '13px' }}>
@@ -766,6 +831,7 @@ const LiveMap: React.FC = () => {
                     </div>
                   </Popup>
                 </CircleMarker>
+                </React.Fragment>
               ))}
             </>
           )}
