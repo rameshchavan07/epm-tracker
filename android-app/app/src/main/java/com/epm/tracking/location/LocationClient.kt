@@ -36,25 +36,31 @@ class DefaultLocationClient(
                 throw LocationClient.LocationException("GPS is disabled")
             }
 
-            // Immediately emit last known location if available
+            // Emit last known location only if fresh (< 60s) and accurate (<= 40m)
             client.lastLocation.addOnSuccessListener { lastLoc ->
                 if (lastLoc != null) {
-                    trySend(lastLoc)
+                    val isFresh = (System.currentTimeMillis() - lastLoc.time) < 60_000L
+                    val isAccurate = !lastLoc.hasAccuracy() || lastLoc.accuracy <= 40f
+                    if (isFresh && isAccurate) {
+                        trySend(lastLoc)
+                    }
                 }
             }
 
             val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, interval)
                 .setMinUpdateIntervalMillis(2000L)
-                .setMinUpdateDistanceMeters(0f)
+                .setMinUpdateDistanceMeters(3f)
                 .setGranularity(Granularity.GRANULARITY_FINE)
-                .setWaitForAccurateLocation(false)
+                .setWaitForAccurateLocation(true)
                 .build()
 
             val locationCallback = object : LocationCallback() {
                 override fun onLocationResult(result: LocationResult) {
                     super.onLocationResult(result)
                     result.locations.lastOrNull()?.let { location ->
-                        trySend(location)
+                        if (!location.hasAccuracy() || location.accuracy <= 40f) {
+                            trySend(location)
+                        }
                     }
                 }
             }

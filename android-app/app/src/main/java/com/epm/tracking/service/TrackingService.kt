@@ -105,6 +105,11 @@ class TrackingService : Service() {
                 }
             }
             .onEach { location ->
+                // Filter out low-accuracy locations (accuracy radius > 40m)
+                if (location.hasAccuracy() && location.accuracy > 40f) {
+                    return@onEach
+                }
+
                 val activeInterval = sessionManager.getTrackingInterval()
                 val now = System.currentTimeMillis()
 

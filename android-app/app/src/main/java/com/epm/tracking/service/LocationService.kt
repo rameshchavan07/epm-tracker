@@ -36,6 +36,7 @@ class LocationService : Service() {
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
                 for (location in locationResult.locations) {
+                    if (location.hasAccuracy() && location.accuracy > 40f) continue
                     serviceScope.launch {
                         database.locationDao().insertLocation(
                             LocationEntity(
@@ -87,6 +88,8 @@ class LocationService : Service() {
     private fun startLocationUpdates() {
         val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000)
             .setMinUpdateIntervalMillis(2000)
+            .setMinUpdateDistanceMeters(3f)
+            .setWaitForAccurateLocation(true)
             .build()
 
         try {
