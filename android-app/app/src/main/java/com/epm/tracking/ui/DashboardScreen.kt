@@ -392,14 +392,10 @@ fun DashboardScreen(
                     val intent = Intent(context, TrackingService::class.java).apply {
                         action = if (isTracking) TrackingService.ACTION_STOP else TrackingService.ACTION_START
                     }
-                    if (isTracking) {
-                        context.stopService(intent)
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        context.startForegroundService(intent)
                     } else {
-                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                            context.startForegroundService(intent)
-                        } else {
-                            context.startService(intent)
-                        }
+                        context.startService(intent)
                     }
                     isTracking = !isTracking
                     
@@ -447,7 +443,11 @@ fun DashboardScreen(
                 showVerificationDialog = false
                 Intent(context, TrackingService::class.java).apply {
                     action = TrackingService.ACTION_STOP
-                    context.stopService(this)
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        context.startForegroundService(this)
+                    } else {
+                        context.startService(this)
+                    }
                 }
                 onLogout()
             }

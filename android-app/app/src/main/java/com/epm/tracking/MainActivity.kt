@@ -39,19 +39,11 @@ class MainActivity : FragmentActivity() {
             return perms.toTypedArray()
         }
 
-    // Launcher that shows the system permission dialog for all required permissions at once
-    private val permissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
-            // results: Map<permission, granted>
-            // No crash handling needed here — DashboardScreen guards the service start
-            // and shows a message if permission was denied.
-        }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Request permissions as soon as the app opens
-        permissionLauncher.launch(requiredPermissions)
+        // Request permissions as soon as the app opens using standard 16-bit request code to bypass Jetpack registry bug
+        androidx.core.app.ActivityCompat.requestPermissions(this, requiredPermissions, 101)
 
         setupSyncWorker()
 

@@ -291,10 +291,10 @@ export class TrackingService {
     };
   }
 
-  // Runs every 2 minutes — marks mobile devices offline if no location received within dynamic threshold
-  @Cron('0 */2 * * * *')
+  // Runs every 1 minute — marks mobile devices offline if no location received within dynamic threshold
+  @Cron('0 */1 * * * *')
   async markOfflineUsers(): Promise<void> {
-    const staleMinutes = Math.max(5, Math.ceil(this.activeTrackingIntervalMinutes * 2.5));
+    const staleMinutes = Math.max(3, Math.ceil(this.activeTrackingIntervalMinutes * 1.5));
     const staleCutoff = new Date(Date.now() - staleMinutes * 60 * 1000);
 
     const staleDevices = await this.prisma.mobileUser.findMany({

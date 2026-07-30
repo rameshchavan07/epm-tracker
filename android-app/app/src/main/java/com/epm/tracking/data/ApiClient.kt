@@ -15,7 +15,11 @@ object ApiClient {
 
     fun getService(): ApiService {
         if (retrofit == null) {
-            val client = OkHttpClient.Builder().build()
+            val client = OkHttpClient.Builder()
+                .connectTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                .writeTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                .build()
 
             retrofit = Retrofit.Builder()
                 .baseUrl(BASE_URL)

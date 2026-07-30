@@ -18,8 +18,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -39,7 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors
 
@@ -62,7 +60,6 @@ fun FaceCaptureCamera(
     captureButtonText: String = "📷 Capture Face",
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
 
@@ -124,7 +121,7 @@ fun FaceCaptureCamera(
                             val cameraProvider = cameraProviderFuture.get()
 
                             val preview = Preview.Builder().build().also {
-                                it.surfaceProvider = previewView.surfaceProvider
+                                it.setSurfaceProvider(previewView.surfaceProvider)
                             }
 
                             val imageCaptureBuilder = ImageCapture.Builder()
@@ -292,13 +289,6 @@ fun FaceCaptureCamera(
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
                 enabled = imageCapture != null
             ) {
-                Icon(
-                    imageVector = Icons.Default.CameraAlt,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     captureButtonText,
                     color = Color.White,
