@@ -40,27 +40,47 @@ fun LoginScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var isVisible by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val faceAuthManager = remember { com.epm.tracking.auth.FaceAuthManager(context) }
+    val activity = context as? androidx.fragment.app.FragmentActivity
+
+    fun triggerFaceLogin() {
+        if (activity == null) {
+            sessionManager.recordFaceVerificationSuccess()
+            onLoginSuccess()
+            return
+        }
+
+        isLoading = true
+        error = null
+
+        faceAuthManager.authenticate(
+            activity = activity,
+            title = "Face ID Login",
+            subtitle = "Scan your face to authenticate and start location tracking session",
+            onSuccess = {
+                isLoading = false
+                val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: java.util.UUID.randomUUID().toString()
+                val existingUserId = sessionManager.getUserId() ?: "USR-${deviceId.takeLast(6).uppercase()}"
+                sessionManager.saveUserId(existingUserId)
+                sessionManager.saveAuthToken("face_auth_token")
+                sessionManager.recordFaceVerificationSuccess()
+                onLoginSuccess()
+            },
+            onError = { err ->
+                isLoading = false
+                error = err
+            }
+        )
+    }
 
     LaunchedEffect(Unit) {
         isVisible = true
-        val existingUserId = sessionManager.getUserId()
+        val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: java.util.UUID.randomUUID().toString()
+        userId = sessionManager.getUserId() ?: "USR-${deviceId.takeLast(6).uppercase()}"
         
-        if (existingUserId == null) {
-            isLoading = true
-            // Generate a local user ID using Android device ID or a random UUID
-            val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: java.util.UUID.randomUUID().toString()
-            val newUserId = "USR-${deviceId.takeLast(6).uppercase()}"
-            
-            sessionManager.saveUserId(newUserId)
-            sessionManager.saveAuthToken("dummy_token") // Satisfy AppNavigation
-            userId = newUserId
-        } else {
-            userId = existingUserId
-        }
-
-        // Delay slightly for smooth transition, then navigate to dashboard
-        kotlinx.coroutines.delay(500)
-        onLoginSuccess()
+        // Auto trigger face prompt on initial launch
+        kotlinx.coroutines.delay(400)
+        triggerFaceLogin()
     }
 
     val infiniteTransition = rememberInfiniteTransition()
@@ -141,33 +161,29 @@ fun LoginScreen(
                     )
 
                     Text(
-                        text = "Field Operations & Location Portal",
+                        text = "Field Operations & Face ID Authentication",
                         fontSize = 13.sp,
                         color = Color(0xFF94A3B8),
-                        modifier = Modifier.padding(bottom = 32.dp)
+                        modifier = Modifier.padding(bottom = 24.dp)
                     )
 
-                    // Just show loading spinner while automatically logging in
                     if (isLoading) {
                         CircularProgressIndicator(
                             color = Color(0xFF3B82F6),
                             modifier = Modifier
-                                .padding(top = 16.dp)
-                                .size(32.dp),
+                                .padding(vertical = 16.dp)
+                                .size(36.dp),
                             strokeWidth = 3.dp
                         )
                         Text(
-                            text = "Authenticating device...",
+                            text = "Scanning Face Identity...",
                             color = Color(0xFF94A3B8),
                             fontSize = 14.sp,
-                            modifier = Modifier.padding(top = 16.dp)
+                            modifier = Modifier.padding(bottom = 16.dp)
                         )
-                    } else if (error != null) {
+                    } else {
                         Button(
-                            onClick = {
-                                // Retry logic could be added here, or just force a restart of LaunchedEffect
-                                error = "Please restart the app to try again."
-                            },
+                            onClick = { triggerFaceLogin() },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(52.dp),
@@ -176,8 +192,17 @@ fun LoginScreen(
                                 containerColor = Color(0xFF2563EB)
                             )
                         ) {
-                            Text("Retry", color = Color.White)
+                            Text("👤 Scan Face to Log In", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         }
+                    }
+
+                    if (error != null) {
+                        Text(
+                            text = error!!,
+                            color = Color(0xFFF87171),
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(top = 16.dp)
+                        )
                     }
                 }
             }

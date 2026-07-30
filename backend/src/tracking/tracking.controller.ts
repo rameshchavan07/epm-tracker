@@ -58,8 +58,19 @@ export class TrackingController {
 
   @Post('config')
   @HttpCode(HttpStatus.OK)
-  async updateTrackingConfig(@Body() body: { trackingIntervalMinutes: number }) {
-    return this.trackingService.updateTrackingConfig(body.trackingIntervalMinutes);
+  async updateTrackingConfig(
+    @Body()
+    body: {
+      trackingIntervalMinutes: number;
+      faceVerificationIntervalMinutes?: number;
+      faceVerificationGracePeriodMinutes?: number;
+    },
+  ) {
+    return this.trackingService.updateTrackingConfig(
+      body.trackingIntervalMinutes,
+      body.faceVerificationIntervalMinutes,
+      body.faceVerificationGracePeriodMinutes,
+    );
   }
 
   @Get('analytics')

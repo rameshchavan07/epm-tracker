@@ -55,6 +55,38 @@ fun DashboardScreen(
 
     var sessionStartTime by remember { mutableStateOf(0L) }
     var sessionDuration by remember { mutableStateOf(0L) }
+    var showVerificationDialog by remember { mutableStateOf(false) }
+
+    // Listen for automatic logout / session expiration broadcasts from TrackingService
+    DisposableEffect(context) {
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: android.content.Context?, intent: Intent?) {
+                if (intent?.action == TrackingService.ACTION_SESSION_EXPIRED) {
+                    onLogout()
+                }
+            }
+        }
+        val filter = android.content.IntentFilter(TrackingService.ACTION_SESSION_EXPIRED)
+        androidx.core.content.ContextCompat.registerReceiver(
+            context,
+            receiver,
+            filter,
+            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        onDispose {
+            context.unregisterReceiver(receiver)
+        }
+    }
+
+    // Periodically check if 2-hour face verification is due or grace period pending
+    LaunchedEffect(Unit) {
+        while (true) {
+            if (sessionManager.getPendingVerificationStartTime() > 0L || sessionManager.isFaceVerificationDue()) {
+                showVerificationDialog = true
+            }
+            kotlinx.coroutines.delay(5000L)
+        }
+    }
 
     LaunchedEffect(isTracking) {
         if (isTracking) {
@@ -403,6 +435,23 @@ fun DashboardScreen(
                 }
             }
         }
+    }
+
+    if (showVerificationDialog) {
+        com.epm.tracking.ui.components.VerificationDialog(
+            sessionManager = sessionManager,
+            onVerificationSuccess = {
+                showVerificationDialog = false
+            },
+            onExpired = {
+                showVerificationDialog = false
+                Intent(context, TrackingService::class.java).apply {
+                    action = TrackingService.ACTION_STOP
+                    context.stopService(this)
+                }
+                onLogout()
+            }
+        )
     }
 }
 

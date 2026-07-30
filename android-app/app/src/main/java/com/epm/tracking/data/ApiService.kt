@@ -6,7 +6,11 @@ import retrofit2.http.POST
 
 data class TrackingConfigResponse(
     val trackingIntervalMinutes: Long,
-    val trackingIntervalMs: Long
+    val trackingIntervalMs: Long,
+    val faceVerificationIntervalMinutes: Long? = 120L,
+    val faceVerificationIntervalMs: Long? = 7200000L,
+    val faceVerificationGracePeriodMinutes: Long? = 5L,
+    val faceVerificationGracePeriodMs: Long? = 300000L
 )
 
 data class LoginRequest(
@@ -47,6 +51,14 @@ data class SyncResponse(val success: Boolean, val count: Int)
 
 data class OfflineRequest(val deviceId: String)
 
+data class FaceEnrollRequest(
+    val userId: String,
+    val deviceId: String,
+    val faceData: String? = null
+)
+
+data class FaceEnrollResponse(val success: Boolean, val message: String)
+
 interface ApiService {
     @GET("api/v1")
     suspend fun checkHealth(): retrofit2.Response<okhttp3.ResponseBody>
@@ -55,6 +67,9 @@ interface ApiService {
 
     @POST("api/v1/auth/login")
     suspend fun login(@Body request: LoginRequest): LoginResponse
+
+    @POST("api/v1/auth/enroll-face")
+    suspend fun enrollFace(@Body request: FaceEnrollRequest): FaceEnrollResponse
 
     @POST("api/v1/auth/device-register")
     suspend fun registerDevice(): UserDto

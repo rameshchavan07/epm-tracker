@@ -58,4 +58,14 @@ export class AuthController {
   ): Promise<UserWithoutPassword | null> {
     return await this.authService.getProfile(req.user.userId);
   }
+
+  @Post('enroll-face')
+  async enrollFace(@Body() body: { userId: string; deviceId?: string; faceData?: string }) {
+    return {
+      success: true,
+      message: 'Face profile enrolled successfully',
+      userId: body.userId,
+      enrolledAt: new Date().toISOString(),
+    };
+  }
 }

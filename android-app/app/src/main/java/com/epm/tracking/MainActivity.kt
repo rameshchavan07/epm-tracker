@@ -20,15 +20,17 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.epm.tracking.worker.SyncWorker
 import java.util.concurrent.TimeUnit
+import androidx.fragment.app.FragmentActivity
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     // Build the list of permissions we need to request at runtime
     private val requiredPermissions: Array<String>
         get() {
             val perms = mutableListOf(
                 Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+                Manifest.permission.CAMERA
             )
             // POST_NOTIFICATIONS is only required on Android 13+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

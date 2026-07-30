@@ -77,13 +77,19 @@ class TrackingService : Service() {
         val sessionManager = SessionManager(applicationContext)
         val db = AppDatabase.getDatabase(applicationContext)
 
-        // Fetch dynamic tracking interval setting from backend on service startup
+        // Fetch dynamic tracking & face verification config from backend on service startup
         serviceScope.launch {
             try {
                 val apiService = ApiClient.getService()
                 val config = apiService.getTrackingConfig()
                 if (config.trackingIntervalMs > 0) {
                     sessionManager.saveTrackingInterval(config.trackingIntervalMs)
+                }
+                config.faceVerificationIntervalMs?.let {
+                    sessionManager.saveFaceVerificationInterval(it)
+                }
+                config.faceVerificationGracePeriodMs?.let {
+                    sessionManager.saveFaceVerificationGracePeriod(it)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -105,6 +111,22 @@ class TrackingService : Service() {
                 }
             }
             .onEach { location ->
+                // Check if face verification grace period has expired without verification
+                if (sessionManager.isGracePeriodExpired()) {
+                    sessionManager.clearSession()
+                    val logoutIntent = Intent(ACTION_SESSION_EXPIRED).setPackage(packageName)
+                    sendBroadcast(logoutIntent)
+                    stop()
+                    return@onEach
+                }
+
+                // Check if face verification is due (2 hours elapsed)
+                if (sessionManager.isFaceVerificationDue()) {
+                    sessionManager.startPendingVerificationGracePeriod()
+                    val warningNotif = notification.setContentText("⚠️ Face Verification Required! Please open app.")
+                    notificationManager.notify(1, warningNotif.build())
+                }
+
                 // Filter out low-accuracy locations (accuracy radius > 40m)
                 if (location.hasAccuracy() && location.accuracy > 40f) {
                     return@onEach
@@ -220,6 +242,7 @@ class TrackingService : Service() {
     companion object {
         const val ACTION_START = "ACTION_START"
         const val ACTION_STOP  = "ACTION_STOP"
+        const val ACTION_SESSION_EXPIRED = "com.epm.tracking.ACTION_SESSION_EXPIRED"
     }
 }
 

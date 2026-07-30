@@ -49,18 +49,32 @@ export class TrackingService {
   ) {}
 
   private activeTrackingIntervalMinutes = parseInt(process.env.TRACKING_INTERVAL_MINUTES || '2', 10);
+  private activeFaceVerificationIntervalMinutes = parseInt(process.env.FACE_VERIFICATION_INTERVAL_MINUTES || '120', 10);
+  private activeFaceVerificationGracePeriodMinutes = parseInt(process.env.FACE_VERIFICATION_GRACE_MINUTES || '5', 10);
 
   async getTrackingConfig() {
     return {
       trackingIntervalMinutes: this.activeTrackingIntervalMinutes,
       trackingIntervalMs: this.activeTrackingIntervalMinutes * 60 * 1000,
+      faceVerificationIntervalMinutes: this.activeFaceVerificationIntervalMinutes,
+      faceVerificationIntervalMs: this.activeFaceVerificationIntervalMinutes * 60 * 1000,
+      faceVerificationGracePeriodMinutes: this.activeFaceVerificationGracePeriodMinutes,
+      faceVerificationGracePeriodMs: this.activeFaceVerificationGracePeriodMinutes * 60 * 1000,
     };
   }
 
-  async updateTrackingConfig(minutes: number) {
+  async updateTrackingConfig(minutes: number, faceIntervalMinutes?: number, gracePeriodMinutes?: number) {
     const validMinutes = Math.max(1, Math.min(60, minutes));
     this.activeTrackingIntervalMinutes = validMinutes;
-    this.logger.log(`Updated global tracking frequency to ${validMinutes} minutes`);
+    if (faceIntervalMinutes && faceIntervalMinutes > 0) {
+      this.activeFaceVerificationIntervalMinutes = faceIntervalMinutes;
+    }
+    if (gracePeriodMinutes && gracePeriodMinutes > 0) {
+      this.activeFaceVerificationGracePeriodMinutes = gracePeriodMinutes;
+    }
+    this.logger.log(
+      `Updated global tracking frequency to ${validMinutes} mins, face verification interval to ${this.activeFaceVerificationIntervalMinutes} mins`,
+    );
     return this.getTrackingConfig();
   }
 
