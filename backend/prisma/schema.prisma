@@ -43,3 +43,16 @@ model LocationLog {
 
   @@index([deviceId, recordedAt])
 }
+
+model FaceProfile {
+  id              String   @id @default(uuid())
+  userId          String
+  deviceId        String
+  descriptor      Float[]
+  referenceImage  String   @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, deviceId])
+  @@index([userId])
+}

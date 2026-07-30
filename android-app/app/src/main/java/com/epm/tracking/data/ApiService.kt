@@ -54,10 +54,25 @@ data class OfflineRequest(val deviceId: String)
 data class FaceEnrollRequest(
     val userId: String,
     val deviceId: String,
+    val faceImage: String? = null,
     val faceData: String? = null
 )
 
 data class FaceEnrollResponse(val success: Boolean, val message: String)
+
+data class FaceVerifyRequest(
+    val userId: String,
+    val deviceId: String,
+    val faceImage: String
+)
+
+data class FaceVerifyResponse(
+    val match: Boolean,
+    val confidence: Int,
+    val distance: Double,
+    val threshold: Double,
+    val message: String
+)
 
 interface ApiService {
     @GET("api/v1")
@@ -70,6 +85,9 @@ interface ApiService {
 
     @POST("api/v1/auth/enroll-face")
     suspend fun enrollFace(@Body request: FaceEnrollRequest): FaceEnrollResponse
+
+    @POST("api/v1/auth/verify-face")
+    suspend fun verifyFace(@Body request: FaceVerifyRequest): FaceVerifyResponse
 
     @POST("api/v1/auth/device-register")
     suspend fun registerDevice(): UserDto

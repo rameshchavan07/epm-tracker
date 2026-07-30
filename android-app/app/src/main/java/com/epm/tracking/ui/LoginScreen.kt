@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,71 +15,32 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.epm.tracking.data.ApiClient
-import com.epm.tracking.data.LoginRequest
+import com.epm.tracking.auth.FaceAuthManager
 import com.epm.tracking.data.SessionManager
+import com.epm.tracking.ui.components.FaceCaptureCamera
 import kotlinx.coroutines.launch
 import android.provider.Settings
 import androidx.compose.ui.platform.LocalContext
-import android.content.pm.PackageManager
-import androidx.core.content.ContextCompat
-import android.Manifest
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import kotlinx.coroutines.tasks.await
-import com.google.android.gms.location.LocationServices
 
 @Composable
 fun LoginScreen(
     sessionManager: SessionManager,
     onLoginSuccess: () -> Unit
 ) {
-    var userId by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var isVisible by remember { mutableStateOf(false) }
     val context = LocalContext.current
-    val faceAuthManager = remember { com.epm.tracking.auth.FaceAuthManager(context) }
-    val activity = context as? androidx.fragment.app.FragmentActivity
+    val faceAuthManager = remember { FaceAuthManager(context) }
+    val coroutineScope = rememberCoroutineScope()
 
-    fun triggerFaceLogin() {
-        if (activity == null) {
-            sessionManager.recordFaceVerificationSuccess()
-            onLoginSuccess()
-            return
-        }
-
-        isLoading = true
-        error = null
-
-        faceAuthManager.authenticate(
-            activity = activity,
-            title = "Face ID Login",
-            subtitle = "Scan your face to authenticate and start location tracking session",
-            onSuccess = {
-                isLoading = false
-                val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: java.util.UUID.randomUUID().toString()
-                val existingUserId = sessionManager.getUserId() ?: "USR-${deviceId.takeLast(6).uppercase()}"
-                sessionManager.saveUserId(existingUserId)
-                sessionManager.saveAuthToken("face_auth_token")
-                sessionManager.recordFaceVerificationSuccess()
-                onLoginSuccess()
-            },
-            onError = { err ->
-                isLoading = false
-                error = err
-            }
-        )
-    }
+    var isProcessing by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var showCamera by remember { mutableStateOf(false) }
+    var isVisible by remember { mutableStateOf(false) }
+    var verificationConfidence by remember { mutableStateOf<Int?>(null) }
 
     LaunchedEffect(Unit) {
         isVisible = true
-        val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: java.util.UUID.randomUUID().toString()
-        userId = sessionManager.getUserId() ?: "USR-${deviceId.takeLast(6).uppercase()}"
-        
-        // Auto trigger face prompt on initial launch
-        kotlinx.coroutines.delay(400)
-        triggerFaceLogin()
     }
 
     val infiniteTransition = rememberInfiniteTransition()
@@ -161,29 +121,88 @@ fun LoginScreen(
                     )
 
                     Text(
-                        text = "Field Operations & Face ID Authentication",
+                        text = "Server-Verified Face ID Authentication",
                         fontSize = 13.sp,
                         color = Color(0xFF94A3B8),
                         modifier = Modifier.padding(bottom = 24.dp)
                     )
 
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            color = Color(0xFF3B82F6),
-                            modifier = Modifier
-                                .padding(vertical = 16.dp)
-                                .size(36.dp),
-                            strokeWidth = 3.dp
-                        )
-                        Text(
-                            text = "Scanning Face Identity...",
-                            color = Color(0xFF94A3B8),
-                            fontSize = 14.sp,
-                            modifier = Modifier.padding(bottom = 16.dp)
+                    if (showCamera) {
+                        // Camera capture mode
+                        FaceCaptureCamera(
+                            isCapturing = isProcessing,
+                            captureButtonText = "👤 Capture Face to Log In",
+                            onImageCaptured = { base64Image ->
+                                isProcessing = true
+                                error = null
+
+                                coroutineScope.launch {
+                                    val deviceId = Settings.Secure.getString(
+                                        context.contentResolver,
+                                        Settings.Secure.ANDROID_ID
+                                    ) ?: java.util.UUID.randomUUID().toString()
+                                    val userId = sessionManager.getUserId()
+                                        ?: "USR-${deviceId.takeLast(6).uppercase()}"
+
+                                    // Check if face is enrolled
+                                    if (!sessionManager.isFaceEnrolled()) {
+                                        // First-time user: do enrollment instead
+                                        val enrolled = faceAuthManager.enrollFaceWithServer(userId, base64Image)
+                                        if (enrolled) {
+                                            sessionManager.saveUserId(userId)
+                                            sessionManager.saveAuthToken("face_auth_token")
+                                            sessionManager.recordFaceVerificationSuccess()
+                                            isProcessing = false
+                                            onLoginSuccess()
+                                        } else {
+                                            isProcessing = false
+                                            error = "Face enrollment failed. Please try again."
+                                        }
+                                        return@launch
+                                    }
+
+                                    // Verify face against server-stored profile
+                                    val result = faceAuthManager.verifyFaceWithServer(userId, base64Image)
+
+                                    if (result != null && result.match) {
+                                        verificationConfidence = result.confidence
+                                        sessionManager.saveAuthToken("face_auth_token")
+                                        sessionManager.recordFaceVerificationSuccess()
+                                        isProcessing = false
+                                        onLoginSuccess()
+                                    } else if (result != null) {
+                                        isProcessing = false
+                                        error = "Face does not match. Confidence: ${result.confidence}%. Please try again."
+                                    } else {
+                                        // Network error — fallback to local biometric
+                                        isProcessing = false
+                                        val activity = context as? androidx.fragment.app.FragmentActivity
+                                        if (activity != null) {
+                                            faceAuthManager.authenticate(
+                                                activity = activity,
+                                                title = "Offline Face Login",
+                                                subtitle = "Server unreachable. Using local biometric verification.",
+                                                onSuccess = {
+                                                    sessionManager.saveAuthToken("face_auth_token")
+                                                    sessionManager.recordFaceVerificationSuccess()
+                                                    onLoginSuccess()
+                                                },
+                                                onError = { err ->
+                                                    error = "Offline verification failed: $err"
+                                                }
+                                            )
+                                        } else {
+                                            error = "Server unreachable and biometric fallback unavailable."
+                                        }
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
                         )
                     } else {
+                        // Initial state: show "Open Camera" button
                         Button(
-                            onClick = { triggerFaceLogin() },
+                            onClick = { showCamera = true },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(52.dp),
@@ -192,7 +211,7 @@ fun LoginScreen(
                                 containerColor = Color(0xFF2563EB)
                             )
                         ) {
-                            Text("👤 Scan Face to Log In", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text("👤 Open Camera to Log In", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         }
                     }
 
@@ -209,3 +228,4 @@ fun LoginScreen(
         }
     }
 }
+

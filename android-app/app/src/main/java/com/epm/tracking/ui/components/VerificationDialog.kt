@@ -1,8 +1,11 @@
 package com.epm.tracking.ui.components
 
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -14,10 +17,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.fragment.app.FragmentActivity
 import com.epm.tracking.auth.FaceAuthManager
 import com.epm.tracking.data.SessionManager
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 @Composable
@@ -28,7 +31,10 @@ fun VerificationDialog(
 ) {
     val context = LocalContext.current
     val faceAuthManager = remember { FaceAuthManager(context) }
+    val coroutineScope = rememberCoroutineScope()
+
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isProcessing by remember { mutableStateOf(false) }
 
     val gracePeriodMs = remember { sessionManager.getFaceVerificationGracePeriod() }
     val pendingStartTime = remember { sessionManager.startPendingVerificationGracePeriod() }
@@ -56,24 +62,30 @@ fun VerificationDialog(
     val seconds = (remainingTimeMs / 1000) % 60
     val formattedTime = String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
 
-    val activity = context as? FragmentActivity
+    val activity = context as? androidx.fragment.app.FragmentActivity
 
     Dialog(
         onDismissRequest = { /* Prevent dismissing without verifying */ },
-        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+        properties = DialogProperties(
+            dismissOnBackPress = false,
+            dismissOnClickOutside = false,
+            usePlatformDefaultWidth = false
+        )
     ) {
         Card(
             modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .padding(16.dp),
+                .fillMaxWidth(0.95f)
+                .fillMaxHeight(0.85f)
+                .padding(8.dp),
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
             elevation = CardDefaults.cardElevation(defaultElevation = 16.dp)
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
@@ -83,13 +95,13 @@ fun VerificationDialog(
                     color = Color.White
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = "Your 2-hour session check is due. Please verify your face to keep location tracking active.",
+                    text = "Your 2-hour session check is due. Capture your face to keep tracking active.",
                     fontSize = 13.sp,
                     color = Color(0xFF94A3B8),
-                    modifier = Modifier.padding(bottom = 16.dp)
+                    modifier = Modifier.padding(bottom = 12.dp)
                 )
 
                 // Countdown Timer Box
@@ -97,65 +109,82 @@ fun VerificationDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(Color(0xFF1E293B), shape = RoundedCornerShape(16.dp))
-                        .padding(16.dp),
+                        .padding(12.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = "Time Remaining (Grace Period)",
-                            fontSize = 12.sp,
+                            fontSize = 11.sp,
                             color = Color(0xFF94A3B8)
                         )
                         Text(
                             text = formattedTime,
-                            fontSize = 32.sp,
+                            fontSize = 28.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = if (remainingTimeMs < 60000L) Color(0xFFEF4444) else Color(0xFF3B82F6)
                         )
                     }
                 }
 
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Embedded camera for face capture
+                FaceCaptureCamera(
+                    isCapturing = isProcessing,
+                    captureButtonText = "Verify Face Now",
+                    onImageCaptured = { base64Image ->
+                        isProcessing = true
+                        errorMessage = null
+
+                        coroutineScope.launch {
+                            val userId = sessionManager.getUserId() ?: "unknown"
+
+                            // Try server-side verification first
+                            val result = faceAuthManager.verifyFaceWithServer(userId, base64Image)
+
+                            if (result != null && result.match) {
+                                sessionManager.recordFaceVerificationSuccess()
+                                isProcessing = false
+                                onVerificationSuccess()
+                            } else if (result != null) {
+                                isProcessing = false
+                                errorMessage = "Face does not match (${result.confidence}% confidence). Try again."
+                            } else {
+                                // Network error — fallback to local biometric
+                                isProcessing = false
+                                if (activity != null) {
+                                    faceAuthManager.authenticate(
+                                        activity = activity,
+                                        title = "Re-verify Face Identity",
+                                        subtitle = "Server unreachable. Using local biometric verification.",
+                                        onSuccess = {
+                                            sessionManager.recordFaceVerificationSuccess()
+                                            onVerificationSuccess()
+                                        },
+                                        onError = { err ->
+                                            errorMessage = "Offline verification failed: $err"
+                                        }
+                                    )
+                                } else {
+                                    errorMessage = "Server unreachable. Please check your connection."
+                                }
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
                 if (errorMessage != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = errorMessage!!,
                         color = Color(0xFFF87171),
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(top = 12.dp)
+                        fontSize = 12.sp
                     )
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                Button(
-                    onClick = {
-                        if (activity != null) {
-                            faceAuthManager.authenticate(
-                                activity = activity,
-                                title = "Re-verify Face Identity",
-                                subtitle = "Scan face to continue active location tracking session",
-                                onSuccess = {
-                                    sessionManager.recordFaceVerificationSuccess()
-                                    onVerificationSuccess()
-                                },
-                                onError = { err ->
-                                    errorMessage = err
-                                }
-                            )
-                        } else {
-                            // Fallback if not inside FragmentActivity
-                            sessionManager.recordFaceVerificationSuccess()
-                            onVerificationSuccess()
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
-                ) {
-                    Text("Verify Face Now", color = Color.White, fontWeight = FontWeight.Bold)
                 }
             }
         }
     }
 }
+
