@@ -390,13 +390,17 @@ fun DashboardScreen(
                         }
                     }
 
-                    val intent = Intent(context, TrackingService::class.java).apply {
-                        action = if (isTracking) TrackingService.ACTION_STOP else TrackingService.ACTION_START
-                    }
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                        context.startForegroundService(intent)
+                    if (isTracking) {
+                        context.stopService(Intent(context, TrackingService::class.java))
                     } else {
-                        context.startService(intent)
+                        val intent = Intent(context, TrackingService::class.java).apply {
+                            action = TrackingService.ACTION_START
+                        }
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                            context.startForegroundService(intent)
+                        } else {
+                            context.startService(intent)
+                        }
                     }
                     isTracking = !isTracking
                     
@@ -442,14 +446,7 @@ fun DashboardScreen(
             },
             onExpired = {
                 showVerificationDialog = false
-                Intent(context, TrackingService::class.java).apply {
-                    action = TrackingService.ACTION_STOP
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                        context.startForegroundService(this)
-                    } else {
-                        context.startService(this)
-                    }
-                }
+                context.stopService(Intent(context, TrackingService::class.java))
                 onLogout()
             }
         )
@@ -462,14 +459,7 @@ fun DashboardScreen(
                 showLogoutVerification = false
                 
                 // Stop location service
-                Intent(context, TrackingService::class.java).apply {
-                    action = TrackingService.ACTION_STOP
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                        context.startForegroundService(this)
-                    } else {
-                        context.startService(this)
-                    }
-                }
+                context.stopService(Intent(context, TrackingService::class.java))
                 
                 onLogout()
             },
