@@ -69,8 +69,13 @@ export class MobileUsersService {
       },
     });
 
+    const faceProfiles = await this.prisma.faceProfile.findMany();
+
     return devices.map((dev) => {
       const lastLog = dev.locationLogs[0];
+      const profile = faceProfiles.find(
+        (p) => p.userId === dev.userId && p.deviceId === dev.deviceId,
+      );
       return {
         deviceId: dev.deviceId,
         userId: dev.userId,
@@ -79,6 +84,11 @@ export class MobileUsersService {
         updatedAt: dev.updatedAt,
         lastLocationAt: lastLog ? lastLog.recordedAt : null,
         _count: dev._count,
+        faceProfile: profile ? {
+          referenceImage: profile.referenceImage,
+          lastLoginImage: profile.lastLoginImage,
+          lastVerifiedAt: profile.lastVerifiedAt,
+        } : null,
       };
     });
   }

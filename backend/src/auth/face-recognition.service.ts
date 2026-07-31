@@ -221,6 +221,22 @@ export class FaceRecognitionService implements OnModuleInit {
       profile.descriptor,
     );
     const isMatch = distance < this.matchThreshold;
+
+    // Save verification image to database upon successful match
+    if (isMatch) {
+      try {
+        await this.prisma.faceProfile.update({
+          where: { id: profile.id },
+          data: {
+            lastLoginImage: base64Image,
+            lastVerifiedAt: new Date(),
+          },
+        });
+      } catch (dbErr) {
+        this.logger.error('Failed to update last login image in face profile', dbErr);
+      }
+    }
+
     // Convert distance to a confidence percentage (0-100)
     const confidence = Math.max(
       0,

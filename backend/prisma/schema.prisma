@@ -50,6 +50,8 @@ model FaceProfile {
   deviceId        String
   descriptor      Float[]
   referenceImage  String   @db.Text
+  lastLoginImage  String?  @db.Text
+  lastVerifiedAt  DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

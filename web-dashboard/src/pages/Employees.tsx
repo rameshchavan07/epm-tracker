@@ -3,6 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { Smartphone, Search, Edit, Trash2, Download, Navigation, X, Check, Clock } from 'lucide-react';
 import apiClient from '../api/client';
 
+interface FaceProfile {
+  referenceImage: string;
+  lastLoginImage?: string | null;
+  lastVerifiedAt?: string | null;
+}
+
 interface MobileDevice {
   deviceId: string;
   userId: string;
@@ -15,6 +21,7 @@ interface MobileDevice {
   _count?: {
     locationLogs: number;
   };
+  faceProfile?: FaceProfile | null;
 }
 
 interface LocationHistoryItem {
@@ -364,6 +371,56 @@ const Employees: React.FC = () => {
                   <p style={{ color: '#fff' }}>{selectedDevice._count?.locationLogs ?? 0}</p>
                 </div>
               </div>
+
+              {/* Face Biometric Profiles Section */}
+              {selectedDevice.faceProfile ? (
+                <div style={{ marginTop: '16px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '16px' }}>
+                  <p className="text-secondary" style={{ fontSize: '14px', marginBottom: '12px', fontWeight: 600 }}>Face Biometric Profiles</p>
+                  
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                    {/* Registered / Enrollment Image */}
+                    <div>
+                      <p className="text-secondary" style={{ fontSize: '12px', marginBottom: '8px' }}>Enrolled Reference Image</p>
+                      <div style={{ width: '100%', aspectRatio: '1', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)', background: '#1e293b' }}>
+                        <img 
+                          src={selectedDevice.faceProfile.referenceImage.startsWith('data:') ? selectedDevice.faceProfile.referenceImage : `data:image/jpeg;base64,${selectedDevice.faceProfile.referenceImage}`} 
+                          alt="Enrolled reference" 
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                        />
+                      </div>
+                    </div>
+
+                    {/* Last Login/Verification Image */}
+                    <div>
+                      <p className="text-secondary" style={{ fontSize: '12px', marginBottom: '8px' }}>
+                        Last Verification Image
+                        {selectedDevice.faceProfile.lastVerifiedAt && (
+                          <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', display: 'block', marginTop: '2px' }}>
+                            {new Date(selectedDevice.faceProfile.lastVerifiedAt).toLocaleString()}
+                          </span>
+                        )}
+                      </p>
+                      <div style={{ width: '100%', aspectRatio: '1', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)', background: '#1e293b' }}>
+                        {selectedDevice.faceProfile.lastLoginImage ? (
+                          <img 
+                            src={selectedDevice.faceProfile.lastLoginImage.startsWith('data:') ? selectedDevice.faceProfile.lastLoginImage : `data:image/jpeg;base64,${selectedDevice.faceProfile.lastLoginImage}`} 
+                            alt="Last verification" 
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                          />
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'rgba(255,255,255,0.3)', fontSize: '12px', textAlign: 'center', padding: '8px' }}>
+                            No verification photo yet
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ marginTop: '16px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '16px', color: 'rgba(255,255,255,0.4)', fontSize: '13px' }}>
+                  No face registration profile active on server.
+                </div>
+              )}
             </div>
           </div>
         </div>
