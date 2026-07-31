@@ -1,7 +1,6 @@
 package com.epm.tracking.ui.components
 
 import android.provider.Settings
-import com.epm.tracking.service.BuzzerManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -20,15 +19,13 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.epm.tracking.auth.FaceAuthManager
 import com.epm.tracking.data.SessionManager
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 @Composable
-fun VerificationDialog(
+fun LogoutVerificationDialog(
     sessionManager: SessionManager,
     onVerificationSuccess: () -> Unit,
-    onExpired: () -> Unit
+    onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
     val faceAuthManager = remember { FaceAuthManager(context) }
@@ -36,54 +33,13 @@ fun VerificationDialog(
 
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isProcessing by remember { mutableStateOf(false) }
-
-    val gracePeriodMs = remember { sessionManager.getFaceVerificationGracePeriod() }
-    val pendingStartTime = remember { sessionManager.startPendingVerificationGracePeriod() }
-
-    var remainingTimeMs by remember {
-        mutableLongStateOf(
-            (gracePeriodMs - (System.currentTimeMillis() - pendingStartTime)).coerceAtLeast(0L)
-        )
-    }
-
-    // Countdown timer ticker
-    LaunchedEffect(pendingStartTime) {
-        while (remainingTimeMs > 0L) {
-            delay(1000L)
-            val updatedRemaining = (gracePeriodMs - (System.currentTimeMillis() - pendingStartTime)).coerceAtLeast(0L)
-            remainingTimeMs = updatedRemaining
-            if (updatedRemaining <= 0L) {
-                onExpired()
-                break
-            }
-        }
-    }
-
-    // Ticker to play warning buzzer tone every 15 seconds while verification is due
-    LaunchedEffect(pendingStartTime) {
-        // Initial beep
-        BuzzerManager.playBuzzer(context)
-        var lastBeepTime = System.currentTimeMillis()
-        while (remainingTimeMs > 0L) {
-            delay(1000L)
-            val now = System.currentTimeMillis()
-            if (now - lastBeepTime >= 15000L) { // Beep every 15 seconds
-                BuzzerManager.playBuzzer(context)
-                lastBeepTime = now
-            }
-        }
-    }
-
-    val minutes = (remainingTimeMs / 1000) / 60
-    val seconds = (remainingTimeMs / 1000) % 60
-    val formattedTime = String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
-
+    
     val activity = context as? androidx.fragment.app.FragmentActivity
 
     Dialog(
-        onDismissRequest = { /* Prevent dismissing without verifying */ },
+        onDismissRequest = onDismiss,
         properties = DialogProperties(
-            dismissOnBackPress = false,
+            dismissOnBackPress = true,
             dismissOnClickOutside = false,
             usePlatformDefaultWidth = false
         )
@@ -104,51 +60,36 @@ fun VerificationDialog(
                     .padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    text = "🔒 Identity Verification Required",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "🔒 Logout Verification Required",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel", color = Color(0xFF94A3B8), fontSize = 14.sp)
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = "Your 2-hour session check is due. Capture your face to keep tracking active.",
+                    text = "Verify your face to confirm identity and complete logout.",
                     fontSize = 13.sp,
                     color = Color(0xFF94A3B8),
-                    modifier = Modifier.padding(bottom = 12.dp)
+                    modifier = Modifier.padding(bottom = 16.dp)
                 )
-
-                // Countdown Timer Box
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0xFF1E293B), shape = RoundedCornerShape(16.dp))
-                        .padding(12.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = "Time Remaining (Grace Period)",
-                            fontSize = 11.sp,
-                            color = Color(0xFF94A3B8)
-                        )
-                        Text(
-                            text = formattedTime,
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = if (remainingTimeMs < 60000L) Color(0xFFEF4444) else Color(0xFF3B82F6)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
 
                 // Embedded camera for face capture
                 FaceCaptureCamera(
                     isCapturing = isProcessing,
-                    captureButtonText = "Verify Face Now",
+                    captureButtonText = "Scan Face to Logout",
                     onImageCaptured = { base64Image ->
                         isProcessing = true
                         errorMessage = null
@@ -156,17 +97,16 @@ fun VerificationDialog(
                         coroutineScope.launch {
                             val userId = sessionManager.getUserId() ?: "unknown"
 
-                            android.util.Log.d("EPM_FACE_LOG", "Starting face re-verification dialog check for User ID: $userId")
+                            android.util.Log.d("EPM_FACE_LOG", "Starting logout face verification for User ID: $userId")
                             // Try server-side verification first
                             val result = faceAuthManager.verifyFaceWithServer(userId, base64Image)
 
                             if (result != null && result.match) {
-                                android.util.Log.i("EPM_FACE_LOG", "Dialog face re-verification succeeded! Confidence: ${result.confidence}%")
-                                sessionManager.recordFaceVerificationSuccess()
+                                android.util.Log.i("EPM_FACE_LOG", "Logout face verification succeeded! Confidence: ${result.confidence}%")
                                 isProcessing = false
                                 onVerificationSuccess()
                             } else if (result != null) {
-                                android.util.Log.w("EPM_FACE_LOG", "Dialog face re-verification failed! Confidence: ${result.confidence}% - Server message: ${result.message}")
+                                android.util.Log.w("EPM_FACE_LOG", "Logout face verification failed! Confidence: ${result.confidence}% - Server message: ${result.message}")
                                 isProcessing = false
                                 errorMessage = if (result.confidence == 0) {
                                     result.message
@@ -174,26 +114,25 @@ fun VerificationDialog(
                                     "Face does not match (${result.confidence}% confidence). Try again."
                                 }
                             } else {
-                                android.util.Log.e("EPM_FACE_LOG", "Server unreachable on dialog verify. Attempting offline local biometric fallback...")
+                                android.util.Log.e("EPM_FACE_LOG", "Server unreachable on logout. Attempting offline local biometric fallback...")
                                 // Network error — fallback to local biometric
                                 isProcessing = false
                                 if (activity != null) {
                                     faceAuthManager.authenticate(
                                         activity = activity,
-                                        title = "Re-verify Face Identity",
+                                        title = "Verify Identity to Logout",
                                         subtitle = "Server unreachable. Using local biometric verification.",
                                         onSuccess = {
-                                            android.util.Log.i("EPM_FACE_LOG", "Offline dialog biometric re-verification succeeded!")
-                                            sessionManager.recordFaceVerificationSuccess()
+                                            android.util.Log.i("EPM_FACE_LOG", "Offline logout biometric verification succeeded!")
                                             onVerificationSuccess()
                                         },
                                         onError = { err ->
-                                            android.util.Log.e("EPM_FACE_LOG", "Offline dialog biometric re-verification failed: $err")
+                                            android.util.Log.e("EPM_FACE_LOG", "Offline logout biometric verification failed: $err")
                                             errorMessage = "Offline verification failed: $err"
                                         }
                                     )
                                 } else {
-                                    android.util.Log.e("EPM_FACE_LOG", "Offline dialog biometric fallback unavailable (null Activity)")
+                                    android.util.Log.e("EPM_FACE_LOG", "Offline logout biometric fallback unavailable (null Activity)")
                                     errorMessage = "Server unreachable. Please check your connection."
                                 }
                             }
@@ -214,4 +153,3 @@ fun VerificationDialog(
         }
     }
 }
-

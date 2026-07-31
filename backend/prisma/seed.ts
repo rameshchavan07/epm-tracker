@@ -23,6 +23,19 @@ async function main() {
   });
   console.log(`Web Admin user ready: ${admin.email}`);
 
+  // 1.5 Create default SystemConfig
+  const config = await prisma.systemConfig.upsert({
+    where: { id: 'default' },
+    update: {},
+    create: {
+      id: 'default',
+      trackingIntervalMinutes: 2,
+      faceVerificationIntervalMinutes: 120,
+      faceVerificationGracePeriodMinutes: 5,
+    },
+  });
+  console.log(`Default SystemConfig ready: tracking=${config.trackingIntervalMinutes}m, face=${config.faceVerificationIntervalMinutes}m`);
+
   // 2. Create Sample Mobile Users (Devices tracking without login)
   const mobileDevices = [
     {

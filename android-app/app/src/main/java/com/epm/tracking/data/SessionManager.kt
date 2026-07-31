@@ -114,7 +114,13 @@ class SessionManager(context: Context) {
     }
 
     fun clearSession() {
-        sharedPreferences.edit().clear().apply()
+        sharedPreferences.edit()
+            .remove(KEY_AUTH_TOKEN)
+            .remove(KEY_USER_ID)
+            .remove(KEY_SHORT_ID)
+            .remove(KEY_LAST_FACE_VERIFICATION_TIME)
+            .remove(KEY_PENDING_VERIFICATION_START_TIME)
+            .apply()
     }
 
     companion object {

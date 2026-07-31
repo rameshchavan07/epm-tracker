@@ -56,6 +56,7 @@ fun DashboardScreen(
     var sessionStartTime by remember { mutableStateOf(0L) }
     var sessionDuration by remember { mutableStateOf(0L) }
     var showVerificationDialog by remember { mutableStateOf(false) }
+    var showLogoutVerification by remember { mutableStateOf(false) }
 
     // Listen for automatic logout / session expiration broadcasts from TrackingService
     DisposableEffect(context) {
@@ -180,7 +181,7 @@ fun DashboardScreen(
                 }
 
                 IconButton(
-                    onClick = onLogout,
+                    onClick = { showLogoutVerification = true },
                     colors = IconButtonDefaults.iconButtonColors(
                         containerColor = Color(0xFFEF4444).copy(alpha = 0.15f)
                     )
@@ -450,6 +451,30 @@ fun DashboardScreen(
                     }
                 }
                 onLogout()
+            }
+        )
+    }
+
+    if (showLogoutVerification) {
+        com.epm.tracking.ui.components.LogoutVerificationDialog(
+            sessionManager = sessionManager,
+            onVerificationSuccess = {
+                showLogoutVerification = false
+                
+                // Stop location service
+                Intent(context, TrackingService::class.java).apply {
+                    action = TrackingService.ACTION_STOP
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        context.startForegroundService(this)
+                    } else {
+                        context.startService(this)
+                    }
+                }
+                
+                onLogout()
+            },
+            onDismiss = {
+                showLogoutVerification = false
             }
         )
     }

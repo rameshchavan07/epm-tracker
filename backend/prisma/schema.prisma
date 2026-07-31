@@ -56,3 +56,12 @@ model FaceProfile {
   @@unique([userId, deviceId])
   @@index([userId])
 }
+
+model SystemConfig {
+  id                                 String   @id @default("default")
+  trackingIntervalMinutes            Int      @default(2)
+  faceVerificationIntervalMinutes    Int      @default(120)
+  faceVerificationGracePeriodMinutes Int      @default(5)
+  updatedAt                          DateTime @updatedAt
+}
+

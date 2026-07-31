@@ -48,33 +48,54 @@ export class TrackingService {
     private trackingGateway: TrackingGateway,
   ) {}
 
-  private activeTrackingIntervalMinutes = parseInt(process.env.TRACKING_INTERVAL_MINUTES || '2', 10);
-  private activeFaceVerificationIntervalMinutes = parseInt(process.env.FACE_VERIFICATION_INTERVAL_MINUTES || '120', 10);
-  private activeFaceVerificationGracePeriodMinutes = parseInt(process.env.FACE_VERIFICATION_GRACE_MINUTES || '5', 10);
-
   async getTrackingConfig() {
+    let config = await this.prisma.systemConfig.findUnique({
+      where: { id: 'default' },
+    });
+    if (!config) {
+      config = await this.prisma.systemConfig.create({
+        data: {
+          id: 'default',
+          trackingIntervalMinutes: 2,
+          faceVerificationIntervalMinutes: 120,
+          faceVerificationGracePeriodMinutes: 5,
+        },
+      });
+    }
     return {
-      trackingIntervalMinutes: this.activeTrackingIntervalMinutes,
-      trackingIntervalMs: this.activeTrackingIntervalMinutes * 60 * 1000,
-      faceVerificationIntervalMinutes: this.activeFaceVerificationIntervalMinutes,
-      faceVerificationIntervalMs: this.activeFaceVerificationIntervalMinutes * 60 * 1000,
-      faceVerificationGracePeriodMinutes: this.activeFaceVerificationGracePeriodMinutes,
-      faceVerificationGracePeriodMs: this.activeFaceVerificationGracePeriodMinutes * 60 * 1000,
+      trackingIntervalMinutes: config.trackingIntervalMinutes,
+      trackingIntervalMs: config.trackingIntervalMinutes * 60 * 1000,
+      faceVerificationIntervalMinutes: config.faceVerificationIntervalMinutes,
+      faceVerificationIntervalMs: config.faceVerificationIntervalMinutes * 60 * 1000,
+      faceVerificationGracePeriodMinutes: config.faceVerificationGracePeriodMinutes,
+      faceVerificationGracePeriodMs: config.faceVerificationGracePeriodMinutes * 60 * 1000,
     };
   }
 
   async updateTrackingConfig(minutes: number, faceIntervalMinutes?: number, gracePeriodMinutes?: number) {
     const validMinutes = Math.max(1, Math.min(60, minutes));
-    this.activeTrackingIntervalMinutes = validMinutes;
-    if (faceIntervalMinutes && faceIntervalMinutes > 0) {
-      this.activeFaceVerificationIntervalMinutes = faceIntervalMinutes;
-    }
-    if (gracePeriodMinutes && gracePeriodMinutes > 0) {
-      this.activeFaceVerificationGracePeriodMinutes = gracePeriodMinutes;
-    }
+    const faceInterval = faceIntervalMinutes && faceIntervalMinutes > 0 ? faceIntervalMinutes : 120;
+    const gracePeriod = gracePeriodMinutes && gracePeriodMinutes > 0 ? gracePeriodMinutes : 5;
+
+    await this.prisma.systemConfig.upsert({
+      where: { id: 'default' },
+      update: {
+        trackingIntervalMinutes: validMinutes,
+        faceVerificationIntervalMinutes: faceInterval,
+        faceVerificationGracePeriodMinutes: gracePeriod,
+      },
+      create: {
+        id: 'default',
+        trackingIntervalMinutes: validMinutes,
+        faceVerificationIntervalMinutes: faceInterval,
+        faceVerificationGracePeriodMinutes: gracePeriod,
+      },
+    });
+
     this.logger.log(
-      `Updated global tracking frequency to ${validMinutes} mins, face verification interval to ${this.activeFaceVerificationIntervalMinutes} mins`,
+      `Updated database tracking config to: tracking=${validMinutes}m, face=${faceInterval}m, grace=${gracePeriod}m`,
     );
+
     return this.getTrackingConfig();
   }
 
@@ -294,7 +315,8 @@ export class TrackingService {
   // Runs every 1 minute — marks mobile devices offline if no location received within dynamic threshold
   @Cron('0 */1 * * * *')
   async markOfflineUsers(): Promise<void> {
-    const staleMinutes = Math.max(3, Math.ceil(this.activeTrackingIntervalMinutes * 1.5));
+    const config = await this.getTrackingConfig();
+    const staleMinutes = Math.max(3, Math.ceil(config.trackingIntervalMinutes * 1.5));
     const staleCutoff = new Date(Date.now() - staleMinutes * 60 * 1000);
 
     const staleDevices = await this.prisma.mobileUser.findMany({

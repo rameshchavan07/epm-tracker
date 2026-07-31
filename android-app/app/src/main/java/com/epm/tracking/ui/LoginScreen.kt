@@ -38,6 +38,7 @@ fun LoginScreen(
     var showCamera by remember { mutableStateOf(false) }
     var isVisible by remember { mutableStateOf(false) }
     var verificationConfidence by remember { mutableStateOf<Int?>(null) }
+    val isFaceEnrolled = remember { sessionManager.isFaceEnrolled() }
 
     LaunchedEffect(Unit) {
         isVisible = true
@@ -121,7 +122,7 @@ fun LoginScreen(
                     )
 
                     Text(
-                        text = "Server-Verified Face ID Authentication",
+                        text = if (isFaceEnrolled) "Server-Verified Face ID Authentication" else "First-Time Face Registration",
                         fontSize = 13.sp,
                         color = Color(0xFF94A3B8),
                         modifier = Modifier.padding(bottom = 24.dp)
@@ -131,7 +132,7 @@ fun LoginScreen(
                         // Camera capture mode
                         FaceCaptureCamera(
                             isCapturing = isProcessing,
-                            captureButtonText = "👤 Capture Face to Log In",
+                            captureButtonText = if (isFaceEnrolled) "👤 Capture Face to Log In" else "👤 Capture Face to Register",
                             onImageCaptured = { base64Image ->
                                 isProcessing = true
                                 error = null
@@ -147,33 +148,42 @@ fun LoginScreen(
                                     // Check if face is enrolled
                                     if (!sessionManager.isFaceEnrolled()) {
                                         // First-time user: do enrollment instead
+                                        android.util.Log.d("EPM_FACE_LOG", "User needs face registration. Starting enrollment on server for User ID: $userId")
                                         val enrolled = faceAuthManager.enrollFaceWithServer(userId, base64Image)
                                         if (enrolled) {
+                                            android.util.Log.i("EPM_FACE_LOG", "Face successfully registered/enrolled on server for User ID: $userId")
                                             sessionManager.saveUserId(userId)
+                                            sessionManager.saveFaceEnrolled(true)
                                             sessionManager.saveAuthToken("face_auth_token")
                                             sessionManager.recordFaceVerificationSuccess()
                                             isProcessing = false
                                             onLoginSuccess()
                                         } else {
+                                            android.util.Log.e("EPM_FACE_LOG", "Face enrollment failed on server for User ID: $userId")
                                             isProcessing = false
                                             error = "Face enrollment failed. Please try again."
                                         }
                                         return@launch
                                     }
 
+                                    android.util.Log.d("EPM_FACE_LOG", "Face is already enrolled. Requesting face verification from server for User ID: $userId")
                                     // Verify face against server-stored profile
                                     val result = faceAuthManager.verifyFaceWithServer(userId, base64Image)
 
                                     if (result != null && result.match) {
+                                        android.util.Log.i("EPM_FACE_LOG", "Face verification succeeded! Match confidence: ${result.confidence}% (distance=${result.distance})")
                                         verificationConfidence = result.confidence
+                                        sessionManager.saveUserId(userId)
                                         sessionManager.saveAuthToken("face_auth_token")
                                         sessionManager.recordFaceVerificationSuccess()
                                         isProcessing = false
                                         onLoginSuccess()
                                     } else if (result != null) {
+                                        android.util.Log.w("EPM_FACE_LOG", "Face verification failed! Confidence: ${result.confidence}% (distance=${result.distance}) - Server message: ${result.message}")
                                         isProcessing = false
                                         error = "Face does not match. Confidence: ${result.confidence}%. Please try again."
                                     } else {
+                                        android.util.Log.e("EPM_FACE_LOG", "Server verification unreachable. Attempting offline local biometric fallback...")
                                         // Network error — fallback to local biometric
                                         isProcessing = false
                                         val activity = context as? androidx.fragment.app.FragmentActivity
@@ -183,15 +193,19 @@ fun LoginScreen(
                                                 title = "Offline Face Login",
                                                 subtitle = "Server unreachable. Using local biometric verification.",
                                                 onSuccess = {
+                                                    android.util.Log.i("EPM_FACE_LOG", "Offline local biometric verification succeeded!")
+                                                    sessionManager.saveUserId(userId)
                                                     sessionManager.saveAuthToken("face_auth_token")
                                                     sessionManager.recordFaceVerificationSuccess()
                                                     onLoginSuccess()
                                                 },
                                                 onError = { err ->
+                                                    android.util.Log.e("EPM_FACE_LOG", "Offline local biometric verification failed: $err")
                                                     error = "Offline verification failed: $err"
                                                 }
                                             )
                                         } else {
+                                            android.util.Log.e("EPM_FACE_LOG", "Offline local biometric fallback unavailable (null Activity)")
                                             error = "Server unreachable and biometric fallback unavailable."
                                         }
                                     }
@@ -211,7 +225,12 @@ fun LoginScreen(
                                 containerColor = Color(0xFF2563EB)
                             )
                         ) {
-                            Text("👤 Open Camera to Log In", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text(
+                                text = if (isFaceEnrolled) "👤 Open Camera to Log In" else "👤 Open Camera to Register Face",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            )
                         }
                     }
 

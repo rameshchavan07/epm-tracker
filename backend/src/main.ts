@@ -1,4 +1,5 @@
 import 'dotenv/config';
+// import '@tensorflow/tfjs-node'; // Native bindings incompatible with Node v24
 import * as dns from 'node:dns';
 dns.setDefaultResultOrder('ipv4first');
 import { NestFactory } from '@nestjs/core';

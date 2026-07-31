@@ -26,12 +26,14 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
+import com.epm.tracking.auth.FaceAuthManager
 
 class TrackingService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var locationClient: LocationClient
     private var lastSavedTimestamp: Long = 0L
+    private var isAutoVerifying = false
 
     // How often to request a location fix (2 minutes)
     private val trackingInterval = 120000L
@@ -51,7 +53,7 @@ class TrackingService : Service() {
             ACTION_START -> start()
             ACTION_STOP  -> stop()
         }
-        return super.onStartCommand(intent, flags, startId)
+        return START_NOT_STICKY
     }
 
     private fun start() {
@@ -118,13 +120,54 @@ class TrackingService : Service() {
                     sendBroadcast(logoutIntent)
                     stop()
                     return@onEach
-                }
-
-                // Check if face verification is due (2 hours elapsed)
+                }                // Check if face verification is due (2 hours elapsed)
                 if (sessionManager.isFaceVerificationDue()) {
                     sessionManager.startPendingVerificationGracePeriod()
-                    val warningNotif = notification.setContentText("⚠️ Face Verification Required! Please open app.")
-                    notificationManager.notify(1, warningNotif.build())
+
+                    if (!isAutoVerifying) {
+                        isAutoVerifying = true
+                        serviceScope.launch {
+                            try {
+                                val currentUserId = sessionManager.getUserId() ?: "USR-${deviceId.takeLast(6).uppercase()}"
+                                android.util.Log.d("EPM_FACE_LOG", "Background face verification due. Triggering silent camera capture...")
+                                val base64 = BackgroundCameraHelper.captureFaceInBackground(applicationContext)
+                                if (base64 != null) {
+                                    android.util.Log.d("EPM_FACE_LOG", "Background photo captured. Querying server face verification for User ID: $currentUserId")
+                                    val faceAuthManager = FaceAuthManager(applicationContext)
+                                    val response = faceAuthManager.verifyFaceWithServer(currentUserId, base64)
+                                    if (response != null && response.match) {
+                                        android.util.Log.i("EPM_FACE_LOG", "Background automatic face verification succeeded! Confidence: ${response.confidence}%")
+                                        // Silent verification success! Extend session.
+                                        sessionManager.recordFaceVerificationSuccess()
+                                        
+                                        // Reset warning notification to normal tracking text
+                                        val normalNotif = notification.setContentText("Tracking your location...")
+                                        notificationManager.notify(1, normalNotif.build())
+                                    } else {
+                                        android.util.Log.w("EPM_FACE_LOG", "Background face verification mismatch: ${response?.confidence}% - ${response?.message}")
+                                        // Face mismatch
+                                        BuzzerManager.playBuzzer(applicationContext)
+                                        val warningNotif = notification.setContentText("⚠️ Face Verification Required! Please open app.")
+                                        notificationManager.notify(1, warningNotif.build())
+                                    }
+                                } else {
+                                    android.util.Log.e("EPM_FACE_LOG", "Background face capture failed (camera blocked, device in pocket, or dark environment)")
+                                    // Camera failed to capture in background (e.g. device is in pocket or blocked)
+                                    BuzzerManager.playBuzzer(applicationContext)
+                                    val warningNotif = notification.setContentText("⚠️ Face Verification Required! Please open app.")
+                                    notificationManager.notify(1, warningNotif.build())
+                                }
+                            } catch (e: Exception) {
+                                android.util.Log.e("EPM_FACE_LOG", "Background verification process encountered an exception", e)
+                            } finally {
+                                isAutoVerifying = false
+                            }
+                        }
+                    } else {
+                        android.util.Log.d("EPM_FACE_LOG", "Face verification due, but background camera capture is already in progress.")
+                        // Already auto-verifying: beep buzzer as a persistent reminder
+                        BuzzerManager.playBuzzer(applicationContext)
+                    }
                 }
 
                 // Filter out low-accuracy locations (accuracy radius > 40m)
@@ -218,9 +261,13 @@ class TrackingService : Service() {
     }
 
     private fun stop() {
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
         val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
-        
-        // Use GlobalScope for a quick fire-and-forget network call that survives service destruction
         @Suppress("OPT_IN_USAGE")
         GlobalScope.launch(Dispatchers.IO) {
             try {
@@ -229,13 +276,6 @@ class TrackingService : Service() {
                 e.printStackTrace()
             }
         }
-        
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
         serviceScope.cancel()
     }
 

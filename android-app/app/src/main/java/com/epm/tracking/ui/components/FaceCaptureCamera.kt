@@ -14,15 +14,12 @@ import androidx.camera.view.PreviewView
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -31,7 +28,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -55,10 +51,10 @@ import java.util.concurrent.Executors
  */
 @Composable
 fun FaceCaptureCamera(
-    isCapturing: Boolean = false,
     onImageCaptured: (String) -> Unit,
-    captureButtonText: String = "📷 Capture Face",
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isCapturing: Boolean = false,
+    captureButtonText: String = "📷 Capture Face"
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
@@ -121,7 +117,7 @@ fun FaceCaptureCamera(
                             val cameraProvider = cameraProviderFuture.get()
 
                             val preview = Preview.Builder().build().also {
-                                it.setSurfaceProvider(previewView.surfaceProvider)
+                                it.surfaceProvider = previewView.surfaceProvider
                             }
 
                             val imageCaptureBuilder = ImageCapture.Builder()
@@ -326,6 +322,7 @@ private fun imageProxyToBitmap(imageProxy: ImageProxy): Bitmap {
 /**
  * Resize a bitmap to fit within maxWidth while maintaining aspect ratio.
  */
+@Suppress("SameParameterValue")
 private fun resizeBitmap(bitmap: Bitmap, maxWidth: Int): Bitmap {
     if (bitmap.width <= maxWidth) return bitmap
     val ratio = maxWidth.toFloat() / bitmap.width.toFloat()
@@ -336,6 +333,7 @@ private fun resizeBitmap(bitmap: Bitmap, maxWidth: Int): Bitmap {
 /**
  * Compress a bitmap to JPEG and encode to Base64 string.
  */
+@Suppress("SameParameterValue")
 private fun bitmapToBase64(bitmap: Bitmap, quality: Int): String {
     val outputStream = ByteArrayOutputStream()
     bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)

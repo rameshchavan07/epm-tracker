@@ -40,36 +40,54 @@ const Employees: React.FC = () => {
   const [historyLogs, setHistoryLogs] = useState<LocationHistoryItem[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
-  // Global Tracking Interval Config State
+  // Global Tracking Config States
   const [trackingInterval, setTrackingInterval] = useState(2);
+  const [faceVerificationInterval, setFaceVerificationInterval] = useState(120);
+  const [faceVerificationGracePeriod, setFaceVerificationGracePeriod] = useState(5);
   const [savingInterval, setSavingInterval] = useState(false);
   const [intervalSavedMsg, setIntervalSavedMsg] = useState('');
 
   const fetchTrackingConfig = async () => {
     try {
       const res = await apiClient.get('/tracking/config');
-      if (res.data && res.data.trackingIntervalMinutes) {
-        setTrackingInterval(res.data.trackingIntervalMinutes);
+      if (res.data) {
+        if (res.data.trackingIntervalMinutes) {
+          setTrackingInterval(res.data.trackingIntervalMinutes);
+        }
+        if (res.data.faceVerificationIntervalMinutes) {
+          setFaceVerificationInterval(res.data.faceVerificationIntervalMinutes);
+        }
+        if (res.data.faceVerificationGracePeriodMinutes) {
+          setFaceVerificationGracePeriod(res.data.faceVerificationGracePeriodMinutes);
+        }
       }
     } catch (err) {
       console.error('Failed to fetch tracking config', err);
     }
   };
 
-  const handleSaveTrackingInterval = async (newInterval: number) => {
+  const handleSaveConfig = async (
+    newInterval: number,
+    newFaceInterval: number,
+    newGracePeriod: number
+  ) => {
     setSavingInterval(true);
     setIntervalSavedMsg('');
     try {
       const res = await apiClient.post('/tracking/config', {
         trackingIntervalMinutes: newInterval,
+        faceVerificationIntervalMinutes: newFaceInterval,
+        faceVerificationGracePeriodMinutes: newGracePeriod,
       });
-      if (res.data && res.data.trackingIntervalMinutes) {
+      if (res.data) {
         setTrackingInterval(res.data.trackingIntervalMinutes);
-        setIntervalSavedMsg('Frequency updated!');
+        setFaceVerificationInterval(res.data.faceVerificationIntervalMinutes);
+        setFaceVerificationGracePeriod(res.data.faceVerificationGracePeriodMinutes);
+        setIntervalSavedMsg('Settings updated!');
         setTimeout(() => setIntervalSavedMsg(''), 3000);
       }
     } catch (err) {
-      console.error('Failed to update tracking frequency', err);
+      console.error('Failed to update configuration', err);
     } finally {
       setSavingInterval(false);
     }
@@ -209,42 +227,109 @@ const Employees: React.FC = () => {
         </div>
       </header>
 
-      {/* Global Tracking Interval Control Card */}
-      <div className="glass-card" style={{ padding: '16px 24px', marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      {/* Global Configuration Panel */}
+      <div className="glass-card" style={{ padding: '24px', marginBottom: '24px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
           <Clock size={22} style={{ color: '#6366f1' }} />
           <div>
-            <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: '#fff' }}>Global Data Collection Frequency</h4>
-            <p style={{ margin: 0, fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)' }}>Configure how frequently Android field devices capture and push location pings.</p>
+            <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#fff' }}>Global Tracking & Security Settings</h4>
+            <p style={{ margin: 0, fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)' }}>Configure tracking frequency, face recognition intervals, and session grace periods for field devices.</p>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <select
-            value={trackingInterval}
-            onChange={(e) => handleSaveTrackingInterval(Number(e.target.value))}
-            disabled={savingInterval}
-            style={{
-              padding: '8px 14px',
-              borderRadius: '8px',
-              background: '#1e293b',
-              color: '#fff',
-              border: '1px solid rgba(255,255,255,0.2)',
-              fontSize: '0.9rem',
-              fontWeight: 500,
-              cursor: 'pointer',
-              outline: 'none'
-            }}
-          >
-            <option value={1}>⚡ 1 Minute (High Precision)</option>
-            <option value={2}>⚡ 2 Minutes (Standard)</option>
-            <option value={5}>⚡ 5 Minutes (Balanced)</option>
-            <option value={10}>⚡ 10 Minutes (Battery Saver)</option>
-            <option value={15}>⚡ 15 Minutes (Low Power)</option>
-          </select>
-          {intervalSavedMsg && (
-            <span style={{ fontSize: '0.85rem', color: '#10b981', fontWeight: 600, animation: 'fadeIn 0.3s' }}>✓ {intervalSavedMsg}</span>
-          )}
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
+          {/* Tracking Frequency */}
+          <div>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 500, color: 'rgba(255,255,255,0.8)', marginBottom: '8px' }}>Location Collection Frequency</label>
+            <select
+              value={trackingInterval}
+              onChange={(e) => handleSaveConfig(Number(e.target.value), faceVerificationInterval, faceVerificationGracePeriod)}
+              disabled={savingInterval}
+              style={{
+                width: '100%',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                background: '#1e293b',
+                color: '#fff',
+                border: '1px solid rgba(255,255,255,0.15)',
+                fontSize: '0.9rem',
+                fontWeight: 500,
+                outline: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              <option value={1}>⚡ 1 Minute (High Precision)</option>
+              <option value={2}>⚡ 2 Minutes (Standard)</option>
+              <option value={5}>⚡ 5 Minutes (Balanced)</option>
+              <option value={10}>⚡ 10 Minutes (Battery Saver)</option>
+              <option value={15}>⚡ 15 Minutes (Low Power)</option>
+            </select>
+          </div>
+
+          {/* Face Verification Frequency */}
+          <div>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 500, color: 'rgba(255,255,255,0.8)', marginBottom: '8px' }}>Face Verification Frequency</label>
+            <select
+              value={faceVerificationInterval}
+              onChange={(e) => handleSaveConfig(trackingInterval, Number(e.target.value), faceVerificationGracePeriod)}
+              disabled={savingInterval}
+              style={{
+                width: '100%',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                background: '#1e293b',
+                color: '#fff',
+                border: '1px solid rgba(255,255,255,0.15)',
+                fontSize: '0.9rem',
+                fontWeight: 500,
+                outline: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              <option value={15}>🔒 15 Minutes (Testing)</option>
+              <option value={30}>🔒 30 Minutes</option>
+              <option value={60}>🔒 1 Hour</option>
+              <option value={120}>🔒 2 Hours (Standard)</option>
+              <option value={240}>🔒 4 Hours</option>
+              <option value={480}>🔒 8 Hours</option>
+            </select>
+          </div>
+
+          {/* Verification Grace Period */}
+          <div>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 500, color: 'rgba(255,255,255,0.8)', marginBottom: '8px' }}>Verification Grace Period</label>
+            <select
+              value={faceVerificationGracePeriod}
+              onChange={(e) => handleSaveConfig(trackingInterval, faceVerificationInterval, Number(e.target.value))}
+              disabled={savingInterval}
+              style={{
+                width: '100%',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                background: '#1e293b',
+                color: '#fff',
+                border: '1px solid rgba(255,255,255,0.15)',
+                fontSize: '0.9rem',
+                fontWeight: 500,
+                outline: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              <option value={1}>⏳ 1 Minute</option>
+              <option value={2}>⏳ 2 Minutes</option>
+              <option value={3}>⏳ 3 Minutes</option>
+              <option value={5}>⏳ 5 Minutes (Standard)</option>
+              <option value={10}>⏳ 10 Minutes</option>
+              <option value={15}>⏳ 15 Minutes</option>
+            </select>
+          </div>
         </div>
+
+        {intervalSavedMsg && (
+          <div style={{ marginTop: '16px', fontSize: '0.85rem', color: '#10b981', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', animation: 'fadeIn 0.3s' }}>
+            <Check size={16} /> {intervalSavedMsg}
+          </div>
+        )}
       </div>
 
       {/* Device Details Modal */}

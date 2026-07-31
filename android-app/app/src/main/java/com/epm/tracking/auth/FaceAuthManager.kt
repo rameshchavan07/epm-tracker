@@ -90,6 +90,7 @@ class FaceAuthManager(private val context: Context) {
         ) ?: "unknown"
 
         return try {
+            android.util.Log.d("EPM_FACE_LOG", "Sending enroll-face request to server for userId=$userId, deviceId=$deviceId")
             val response = ApiClient.getService().enrollFace(
                 FaceEnrollRequest(
                     userId = userId,
@@ -97,9 +98,10 @@ class FaceAuthManager(private val context: Context) {
                     faceImage = base64Image
                 )
             )
+            android.util.Log.i("EPM_FACE_LOG", "Enroll-face server response: success=${response.success}")
             response.success
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("EPM_FACE_LOG", "Enroll-face FAILED with exception: ${e.javaClass.simpleName}: ${e.message}")
             false
         }
     }
@@ -121,15 +123,18 @@ class FaceAuthManager(private val context: Context) {
         ) ?: "unknown"
 
         return try {
-            ApiClient.getService().verifyFace(
+            android.util.Log.d("EPM_FACE_LOG", "Sending verify-face request to server for userId=$userId, deviceId=$deviceId")
+            val response = ApiClient.getService().verifyFace(
                 FaceVerifyRequest(
                     userId = userId,
                     deviceId = deviceId,
                     faceImage = base64Image
                 )
             )
+            android.util.Log.i("EPM_FACE_LOG", "Verify-face server response: match=${response.match}, confidence=${response.confidence}%, distance=${response.distance}")
+            response
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("EPM_FACE_LOG", "Verify-face FAILED with exception: ${e.javaClass.simpleName}: ${e.message}")
             null
         }
     }
