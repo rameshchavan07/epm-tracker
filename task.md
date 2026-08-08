@@ -11,6 +11,7 @@
   - `[x]` Create `SessionManager` for encrypted JWT and User UUID storage (`EncryptedSharedPreferences`)
   - `[x]` Setup Retrofit `ApiClient` (`http://10.0.2.2:3000/`) and `ApiService` data classes (`LoginRequest`, `LocationBatchRequest`, `LoginResponse`)
   - `[x]` Setup Room database (`AppDatabase`, `LocationEntity`, `LocationDao`) for local offline location caching
+  - `[x]` Updated default interval fallback in `SessionManager` to 2 minutes (`120000ms`)
 - `[x]` **Background Services & Processing**
   - `[x]` Create `TrackingService` (Android Foreground Service with notification for continuous location tracking)
   - `[x]` Create `SyncWorker` (WorkManager task for background batch sync of offline Room location logs)
@@ -18,6 +19,8 @@
   - `[x]` Removed 5-second hardcoded testing interval override to use dynamic tracking frequency
   - `[x]` On-device reverse geocoding via `android.location.Geocoder` to resolve place/street names in background service notifications and Room DB
   - `[x]` Record active capture interval latency (e.g. 2 min vs 10 min) with every local Room location log
+  - `[x]` Implemented a timestamp throttle guard in `TrackingService.kt` to reject rapid duplicate callbacks
+  - `[x]` Configured `LocationRequest.Builder` with high-accuracy satellite precision settings (`GRANULARITY_FINE`, `setWaitForAccurateLocation(true)`)
 - `[x]` **User Interface Modernization (Jetpack Compose)**
   - `[x]` Build `LoginScreen` with dark space gradient background, brand badge, and rounded Material 3 fields
   - `[x]` Build `DashboardScreen` updated title to **"Field Agent"** and live User ID display (`User: USR-XXXXX`)
@@ -58,6 +61,7 @@
   - `[x]` **Tracking Module (`/api/v1/tracking`)**: `POST /location`, `POST /location/batch`, `GET /latest`, `GET /history/:userId`, `GET /analytics`, `GET /config`
   - `[x]` **Mobile Users Module (`/api/v1/mobile-users`)**: Device registration and management API using `deviceId` PK
   - `[x]` **Server-Side Fallback Reverse Geocoding**: Integrated OpenStreetMap Nominatim reverse geocoding fallback for missing address payloads
+  - `[x]` Exposed server-configurable tracking frequency (`TRACKING_INTERVAL_MINUTES` in environment configuration and service logic)
 - `[x]` **Server-Side Face Recognition (face-api.js)**
   - `[x]` Created `FaceRecognitionService` with face-api.js + node-canvas for Node.js face processing
   - `[x]` Loaded SSD MobileNet v1, Face Landmark 68, and Face Recognition neural network models from disk
@@ -86,6 +90,8 @@
   - `[x]` `Login.tsx`: Admin & Manager authentication page
   - `[x]` `Overview.tsx`: Analytics overview with metric cards, Recharts charts, and **Export CSV Report** button
   - `[x]` `LiveMap.tsx`: OpenStreetMap Leaflet integration with Socket.io real-time live location listener
+  - `[x]` Resolved connection loops and high server load by correcting the `useEffect` dependency array in `LiveMap.tsx`
+  - `[x]` Added human-readable location addresses to all CSV export functions (across `exportCsv.ts`, `LiveMap.tsx`, and `Employees.tsx`)
   - `[x]` **Interactive Calendar Date Picker**: Native `showPicker()` click trigger with dark mode `colorScheme: dark` styling for instant route playback filtering by date
   - `[x]` **Route Playback & Breadcrumb History**: Interactive map path rendering with dashed Polyline, circle stop markers, and timeline scrubber controls
   - `[x]` **Reverse Geocoding Address & Latency Mode Badges**:
