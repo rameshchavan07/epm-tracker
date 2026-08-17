@@ -21,54 +21,65 @@ object BackgroundCameraHelper {
 
     private val cameraExecutor = Executors.newSingleThreadExecutor()
 
-    suspend fun captureFaceInBackground(context: Context): String? = suspendCancellableCoroutine { continuation ->
-        val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
-        
-        cameraProviderFuture.addListener({
-            try {
-                val cameraProvider = cameraProviderFuture.get()
+    suspend fun captureFaceInBackground(context: Context): String? {
+        return suspendCancellableCoroutine { continuation ->
+            val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
+            
+            cameraProviderFuture.addListener({
+                try {
+                    val cameraProvider = cameraProviderFuture.get()
 
-                val imageCapture = ImageCapture.Builder()
-                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-                    .build()
+                    val imageCapture = ImageCapture.Builder()
+                        .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                        .build()
 
-                val cameraSelector = CameraSelector.Builder()
-                    .requireLensFacing(CameraSelector.LENS_FACING_FRONT)
-                    .build()
+                    val cameraSelector = CameraSelector.Builder()
+                        .requireLensFacing(CameraSelector.LENS_FACING_FRONT)
+                        .build()
 
-                // Bind to application lifecycle using ProcessLifecycleOwner
-                val lifecycleOwner = ProcessLifecycleOwner.get()
-                
-                // Ensure camera is unbound from previous instances
-                cameraProvider.unbindAll()
-                
-                cameraProvider.bindToLifecycle(
-                    lifecycleOwner,
-                    cameraSelector,
-                    imageCapture
-                )
+                    // Bind to application lifecycle using ProcessLifecycleOwner
+                    val lifecycleOwner = ProcessLifecycleOwner.get()
+                    
+                    // Ensure camera is unbound from previous instances
+                    cameraProvider.unbindAll()
+                    
+                    cameraProvider.bindToLifecycle(
+                        lifecycleOwner,
+                        cameraSelector,
+                        imageCapture
+                    )
 
-                // Capture image
-                imageCapture.takePicture(
-                    cameraExecutor,
-                    object : ImageCapture.OnImageCapturedCallback() {
-                        override fun onCaptureSuccess(imageProxy: ImageProxy) {
-                            try {
-                                val bitmap = imageProxyToBitmap(imageProxy)
-                                val resized = resizeBitmap(bitmap, 640)
-                                val base64 = bitmapToBase64(resized, 80)
-                                imageProxy.close()
-                                
-                                // Clean up and release camera on main thread
-                                ContextCompat.getMainExecutor(context).execute {
-                                    cameraProvider.unbindAll()
+                    // Capture image
+                    imageCapture.takePicture(
+                        cameraExecutor,
+                        object : ImageCapture.OnImageCapturedCallback() {
+                            override fun onCaptureSuccess(imageProxy: ImageProxy) {
+                                try {
+                                    val bitmap = imageProxyToBitmap(imageProxy)
+                                    val resized = resizeBitmap(bitmap, 640)
+                                    val base64 = bitmapToBase64(resized, 80)
+                                    imageProxy.close()
+                                    
+                                    // Clean up and release camera on main thread
+                                    ContextCompat.getMainExecutor(context).execute {
+                                        cameraProvider.unbindAll()
+                                    }
+                                    
+                                    if (continuation.isActive) {
+                                        continuation.resume(base64)
+                                    }
+                                } catch (e: Exception) {
+                                    imageProxy.close()
+                                    ContextCompat.getMainExecutor(context).execute {
+                                        cameraProvider.unbindAll()
+                                    }
+                                    if (continuation.isActive) {
+                                        continuation.resume(null)
+                                    }
                                 }
-                                
-                                if (continuation.isActive) {
-                                    continuation.resume(base64)
-                                }
-                            } catch (e: Exception) {
-                                imageProxy.close()
+                            }
+
+                            override fun onError(exception: ImageCaptureException) {
                                 ContextCompat.getMainExecutor(context).execute {
                                     cameraProvider.unbindAll()
                                 }
@@ -77,24 +88,15 @@ object BackgroundCameraHelper {
                                 }
                             }
                         }
+                    )
 
-                        override fun onError(exception: ImageCaptureException) {
-                            ContextCompat.getMainExecutor(context).execute {
-                                cameraProvider.unbindAll()
-                            }
-                            if (continuation.isActive) {
-                                continuation.resume(null)
-                            }
-                        }
+                } catch (e: Exception) {
+                    if (continuation.isActive) {
+                        continuation.resume(null)
                     }
-                )
-
-            } catch (e: Exception) {
-                if (continuation.isActive) {
-                    continuation.resume(null)
                 }
-            }
-        }, ContextCompat.getMainExecutor(context))
+            }, ContextCompat.getMainExecutor(context))
+        }
     }
 
     private fun imageProxyToBitmap(imageProxy: ImageProxy): Bitmap {

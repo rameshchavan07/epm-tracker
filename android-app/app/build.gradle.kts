@@ -24,7 +24,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -49,52 +50,86 @@ android {
 }
 
 dependencies {
-    implementation("androidx.core:core-ktx:1.12.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
-    implementation("androidx.activity:activity-compose:1.8.2")
-    implementation(platform("androidx.compose:compose-bom:2023.10.01"))
+    // Version catalog
+    val coreKtxVersion = "1.12.0"
+    val lifecycleVersion = "2.7.0"
+    val activityComposeVersion = "1.8.2"
+    val composeBomVersion = "2023.10.01"
+    val junitVersion = "4.13.2"
+    val androidxJunitVersion = "1.1.5"
+    val espressoVersion = "3.5.1"
+    val roomVersion = "2.6.1"
+    val navVersion = "2.7.7"
+    val locationVersion = "21.1.0"
+    val coroutinesPlayVersion = "1.7.3"
+    val retrofitVersion = "2.9.0"
+    val workVersion = "2.9.0"
+    val securityCryptoVersion = "1.1.0-alpha06"
+    val biometricVersion = "1.1.0"
+    val cameraxVersion = "1.4.1"
+    val mlkitFaceVersion = "16.1.6"
+    val tfliteVersion = "2.14.0"
+    val tfliteSupportVersion = "0.4.4"
+
+    // ── implementation ──────────────────────────────────────────────
+    implementation(platform("androidx.compose:compose-bom:$composeBomVersion"))
+
+    // AndroidX Core
+    implementation("androidx.core:core-ktx:$coreKtxVersion")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:$lifecycleVersion")
+    implementation("androidx.lifecycle:lifecycle-process:$lifecycleVersion")
+    implementation("androidx.activity:activity-compose:$activityComposeVersion")
+
+    // Jetpack Compose
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
-    
-    testImplementation("junit:junit:4.13.2")
-    androidTestImplementation("androidx.test.ext:junit:1.1.5")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
-    androidTestImplementation(platform("androidx.compose:compose-bom:2023.10.01"))
-    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
-    debugImplementation("androidx.compose.ui:ui-tooling")
-    debugImplementation("androidx.compose.ui:ui-test-manifest")
 
-    val roomVersion = "2.6.1"
-    val navVersion = "2.7.7"
-    
+    // Navigation
     implementation("androidx.navigation:navigation-compose:$navVersion")
-    
+
+    // Room Database
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
-    ksp("androidx.room:room-compiler:$roomVersion")
-    
-    implementation("com.google.android.gms:play-services-location:21.1.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 
-    val retrofitVersion = "2.9.0"
+    // Location Services
+    implementation("com.google.android.gms:play-services-location:$locationVersion")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:$coroutinesPlayVersion")
+
+    // Networking
     implementation("com.squareup.retrofit2:retrofit:$retrofitVersion")
     implementation("com.squareup.retrofit2:converter-gson:$retrofitVersion")
-    implementation("androidx.work:work-runtime-ktx:2.9.0")
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
-    implementation("androidx.biometric:biometric:1.1.0")
+
+    // Background Work & Security
+    implementation("androidx.work:work-runtime-ktx:$workVersion")
+    implementation("androidx.security:security-crypto:$securityCryptoVersion")
+    implementation("androidx.biometric:biometric:$biometricVersion")
 
     // CameraX for face photo capture
-    val cameraxVersion = "1.4.1"
     implementation("androidx.camera:camera-core:$cameraxVersion")
     implementation("androidx.camera:camera-camera2:$cameraxVersion")
     implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
     implementation("androidx.camera:camera-view:$cameraxVersion")
-    implementation("androidx.lifecycle:lifecycle-process:2.7.0")
 
     // On-Device Face Detection & TensorFlow Lite Inference
-    implementation("com.google.mlkit:face-detection:16.1.6")
-    implementation("org.tensorflow:tensorflow-lite:2.14.0")
-    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+    implementation("com.google.mlkit:face-detection:$mlkitFaceVersion")
+    implementation("org.tensorflow:tensorflow-lite:$tfliteVersion")
+    implementation("org.tensorflow:tensorflow-lite-support:$tfliteSupportVersion")
+
+    // ── ksp ─────────────────────────────────────────────────────────
+    ksp("androidx.room:room-compiler:$roomVersion")
+
+    // ── testImplementation ──────────────────────────────────────────
+    testImplementation("junit:junit:$junitVersion")
+
+    // ── androidTestImplementation ───────────────────────────────────
+    androidTestImplementation(platform("androidx.compose:compose-bom:$composeBomVersion"))
+    androidTestImplementation("androidx.test.ext:junit:$androidxJunitVersion")
+    androidTestImplementation("androidx.test.espresso:espresso-core:$espressoVersion")
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+
+    // ── debugImplementation ─────────────────────────────────────────
+    debugImplementation("androidx.compose.ui:ui-tooling")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

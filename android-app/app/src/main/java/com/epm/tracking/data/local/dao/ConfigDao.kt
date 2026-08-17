@@ -13,5 +13,5 @@ interface ConfigDao {
     fun getConfig(): Flow<ConfigEntity?>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun saveConfig(config: ConfigEntity)
+    fun saveConfig(config: ConfigEntity)
 }
