@@ -16,6 +16,7 @@ import java.util.concurrent.Executor
 class FaceAuthManager(private val context: Context) {
 
     private val executor: Executor = ContextCompat.getMainExecutor(context)
+    val tfliteHelper = TFLiteFaceEmbeddingHelper(context)
 
     fun canAuthenticateBiometrics(): Boolean {
         val biometricManager = BiometricManager.from(context)
