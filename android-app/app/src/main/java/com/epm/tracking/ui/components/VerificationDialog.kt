@@ -46,7 +46,6 @@ fun VerificationDialog(
         )
     }
 
-    // Countdown timer ticker
     LaunchedEffect(pendingStartTime) {
         while (remainingTimeMs > 0L) {
             delay(1000L)
@@ -59,15 +58,13 @@ fun VerificationDialog(
         }
     }
 
-    // Ticker to play warning buzzer tone every 15 seconds while verification is due
     LaunchedEffect(pendingStartTime) {
-        // Initial beep
         BuzzerManager.playBuzzer(context)
         var lastBeepTime = System.currentTimeMillis()
         while (remainingTimeMs > 0L) {
             delay(1000L)
             val now = System.currentTimeMillis()
-            if (now - lastBeepTime >= 15000L) { // Beep every 15 seconds
+            if (now - lastBeepTime >= 15000L) {
                 BuzzerManager.playBuzzer(context)
                 lastBeepTime = now
             }
@@ -81,7 +78,7 @@ fun VerificationDialog(
     val activity = context as? androidx.fragment.app.FragmentActivity
 
     Dialog(
-        onDismissRequest = { /* Prevent dismissing without verifying */ },
+        onDismissRequest = { },
         properties = DialogProperties(
             dismissOnBackPress = false,
             dismissOnClickOutside = false,
@@ -120,7 +117,6 @@ fun VerificationDialog(
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
 
-                // Countdown Timer Box
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -145,7 +141,6 @@ fun VerificationDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Embedded camera for face capture
                 FaceCaptureCamera(
                     isCapturing = isProcessing,
                     captureButtonText = "Verify Face Now",
@@ -154,19 +149,15 @@ fun VerificationDialog(
                         errorMessage = null
 
                         coroutineScope.launch {
-                            val userId = sessionManager.getUserId() ?: "unknown"
+                            val empCode = sessionManager.getEmployeeCode() ?: "EMP001"
 
-                            android.util.Log.d("EPM_FACE_LOG", "Starting face re-verification dialog check for User ID: $userId")
-                            // Try server-side verification first
-                            val result = faceAuthManager.verifyFaceWithServer(userId, base64Image)
+                            val result = faceAuthManager.verifyFaceWithServer(empCode, base64Image)
 
                             if (result != null && result.match) {
-                                android.util.Log.i("EPM_FACE_LOG", "Dialog face re-verification succeeded! Confidence: ${result.confidence}%")
                                 sessionManager.recordFaceVerificationSuccess()
                                 isProcessing = false
                                 onVerificationSuccess()
                             } else if (result != null) {
-                                android.util.Log.w("EPM_FACE_LOG", "Dialog face re-verification failed! Confidence: ${result.confidence}% - Server message: ${result.message}")
                                 isProcessing = false
                                 errorMessage = if (result.confidence == 0) {
                                     result.message
@@ -174,8 +165,6 @@ fun VerificationDialog(
                                     "Face does not match (${result.confidence}% confidence). Try again."
                                 }
                             } else {
-                                android.util.Log.e("EPM_FACE_LOG", "Server unreachable on dialog verify. Attempting offline local biometric fallback...")
-                                // Network error — fallback to local biometric
                                 isProcessing = false
                                 if (activity != null) {
                                     faceAuthManager.authenticate(
@@ -183,17 +172,14 @@ fun VerificationDialog(
                                         title = "Re-verify Face Identity",
                                         subtitle = "Server unreachable. Using local biometric verification.",
                                         onSuccess = {
-                                            android.util.Log.i("EPM_FACE_LOG", "Offline dialog biometric re-verification succeeded!")
                                             sessionManager.recordFaceVerificationSuccess()
                                             onVerificationSuccess()
                                         },
                                         onError = { err ->
-                                            android.util.Log.e("EPM_FACE_LOG", "Offline dialog biometric re-verification failed: $err")
                                             errorMessage = "Offline verification failed: $err"
                                         }
                                     )
                                 } else {
-                                    android.util.Log.e("EPM_FACE_LOG", "Offline dialog biometric fallback unavailable (null Activity)")
                                     errorMessage = "Server unreachable. Please check your connection."
                                 }
                             }
@@ -214,4 +200,3 @@ fun VerificationDialog(
         }
     }
 }
-

@@ -25,8 +25,9 @@ export class TrackingController {
 
   @Post('offline')
   @HttpCode(HttpStatus.OK)
-  async markOffline(@Body() body: { deviceId: string }) {
-    return this.trackingService.markOfflineExplicit(body.deviceId);
+  async markOffline(@Body() body: { employeeCode?: string; deviceId?: string; userId?: string }) {
+    const code = body.employeeCode || body.userId || body.deviceId || '';
+    return this.trackingService.markOfflineExplicit(code);
   }
 
   @Post('location/batch')
@@ -40,15 +41,15 @@ export class TrackingController {
     return this.trackingService.getLatestLocations();
   }
 
-  @Get('history/:userId')
+  @Get('history/:employeeCode')
   @UseGuards(JwtAuthGuard)
   async getLocationHistory(
-    @Param('userId') userId: string,
+    @Param('employeeCode') employeeCode: string,
     @Query('limit') limit?: string,
     @Query('date') date?: string,
   ) {
     const limitNum = limit ? parseInt(limit, 10) : 100;
-    return this.trackingService.getLocationHistory(userId, limitNum, date);
+    return this.trackingService.getLocationHistory(employeeCode, limitNum, date);
   }
 
   @Get('config')

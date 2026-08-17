@@ -1,53 +1,31 @@
 import {
   Controller,
-  Get,
   Post,
-  UseGuards,
   Body,
-  Request,
+  Get,
   UnauthorizedException,
-  Logger,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { AuthService, UserWithoutPassword } from './auth.service';
-import {
-  FaceRecognitionService,
-  FaceEnrollResult,
-  FaceVerifyResult,
-} from './face-recognition.service';
 import { LoginDto } from './dto/login.dto';
-import { RegisterDto } from './dto/register.dto';
-import { JwtAuthGuard } from './jwt-auth.guard';
-
-interface AuthenticatedRequest extends Request {
-  user: {
-    userId: string;
-    email: string;
-    role: string;
-  };
-}
-
-export interface LoginResponse {
-  access_token: string;
-  user: UserWithoutPassword;
-}
+import { EmployeesService } from '../employees/employees.service';
+import { FaceRecognitionService, FaceEnrollResult, FaceVerifyResult } from './face-recognition.service';
 
 @Controller('auth')
 export class AuthController {
-  private readonly logger = new Logger(AuthController.name);
-
   constructor(
     private authService: AuthService,
+    private employeesService: EmployeesService,
     private faceRecognitionService: FaceRecognitionService,
   ) {}
 
   @Post('login')
-  async login(@Body() req: LoginDto): Promise<LoginResponse> {
+  @HttpCode(HttpStatus.OK)
+  async login(@Body() req: LoginDto) {
     let user: UserWithoutPassword | null = null;
-
     if (req.email && req.password) {
       user = await this.authService.validateUser(req.email, req.password);
-    } else if (req.userId) {
-      user = await this.authService.loginById(req.userId);
     }
 
     if (!user) {
@@ -58,97 +36,101 @@ export class AuthController {
   }
 
   @Post('register')
-  async register(@Body() req: RegisterDto): Promise<UserWithoutPassword> {
-    return await this.authService.registerAdmin(req);
+  async register(
+    @Body()
+    body: {
+      name: string;
+      email: string;
+      password: string;
+      role?: string;
+    },
+  ) {
+    return this.authService.registerAdmin({
+      name: body.name,
+      email: body.email,
+      password: body.password,
+    });
   }
 
   @Get('me')
-  @UseGuards(JwtAuthGuard)
-  async getProfile(
-    @Request() req: AuthenticatedRequest,
-  ): Promise<UserWithoutPassword | null> {
-    return await this.authService.getProfile(req.user.userId);
+  async me() {
+    return { status: 'ok' };
+  }
+
+  @Post('validate-employee')
+  @HttpCode(HttpStatus.OK)
+  async validateEmployee(@Body() body: { employeeCode: string }) {
+    return this.employeesService.validateEmployeeCode(body.employeeCode);
   }
 
   @Post('enroll-face')
+  @HttpCode(HttpStatus.OK)
   async enrollFace(
     @Body()
     body: {
-      userId: string;
-      deviceId?: string;
-      faceImage?: string;
-      faceData?: string;
+      employeeCode: string;
+      deviceId: string;
+      faceImage: string;
+      registeredBy?: string;
+      latitude?: number;
+      longitude?: number;
     },
   ): Promise<FaceEnrollResult> {
-    const image = body.faceImage || body.faceData;
-    const deviceId = body.deviceId || 'unknown';
-
-    // If face recognition models are loaded and an image is provided, do real enrollment
-    if (this.faceRecognitionService.isReady() && image) {
-      this.logger.log(
-        `Processing face enrollment for user ${body.userId} on device ${deviceId}`,
-      );
-      return this.faceRecognitionService.enrollFace(
-        body.userId,
-        deviceId,
-        image,
-      );
+    if (!body.employeeCode || !body.deviceId || !body.faceImage) {
+      return {
+        success: false,
+        message: 'employeeCode, deviceId, and faceImage are required',
+        employeeCode: body.employeeCode || '',
+        enrolledAt: '',
+      };
     }
 
-    // Fallback: accept enrollment without face matching (models not loaded)
-    this.logger.warn(
-      `Face models not ready or no image provided. Accepting enrollment for user ${body.userId} without face matching.`,
+    return this.faceRecognitionService.enrollFace(
+      body.employeeCode,
+      body.deviceId,
+      body.faceImage,
+      body.latitude,
+      body.longitude,
     );
-    return {
-      success: true,
-      message: 'Face profile enrolled (without server-side matching)',
-      userId: body.userId,
-      enrolledAt: new Date().toISOString(),
-    };
   }
 
   @Post('verify-face')
+  @HttpCode(HttpStatus.OK)
   async verifyFace(
     @Body()
     body: {
-      userId: string;
+      employeeCode?: string;
+      userId?: string;
       deviceId: string;
       faceImage: string;
+      isLogout?: boolean;
+      event?: string;
+      latitude?: number;
+      longitude?: number;
     },
   ): Promise<FaceVerifyResult> {
-    if (!body.faceImage || !body.userId) {
+    const employeeCode = body.employeeCode || body.userId || '';
+    const deviceId = body.deviceId || 'unknown';
+
+    if (!body.faceImage) {
       return {
         match: false,
         confidence: 0,
         distance: 1,
         threshold: 0.6,
-        message: 'userId and faceImage are required',
+        message: 'faceImage is required',
       };
     }
 
-    // If face recognition models are loaded, do real verification
-    if (this.faceRecognitionService.isReady()) {
-      this.logger.log(
-        `Processing face verification for user ${body.userId} on device ${body.deviceId}`,
-      );
-      return this.faceRecognitionService.verifyFace(
-        body.userId,
-        body.deviceId,
-        body.faceImage,
-      );
-    }
+    const isLogout = body.isLogout === true || body.event === 'LOGOUT';
 
-    // Fallback: accept verification without face matching (models not loaded)
-    this.logger.warn(
-      `Face models not ready. Accepting verification for user ${body.userId} without face matching.`,
+    return this.faceRecognitionService.verifyFace(
+      employeeCode,
+      deviceId,
+      body.faceImage,
+      isLogout,
+      body.latitude,
+      body.longitude,
     );
-    return {
-      match: true,
-      confidence: 100,
-      distance: 0,
-      threshold: 0.6,
-      message: 'Face verified (without server-side matching — models not loaded)',
-    };
   }
 }
-

@@ -1,34 +1,37 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Smartphone, Search, Edit, Trash2, Download, Navigation, X, Check, Clock } from 'lucide-react';
+import { Search, Trash2, Download, Navigation, X, Check, Clock, UserCheck } from 'lucide-react';
 import apiClient from '../api/client';
 
 interface FaceProfile {
-  referenceImage: string;
+  referenceImage?: string;
+  registered_face_image?: string;
   lastLoginImage?: string | null;
+  last_login_image?: string | null;
   lastVerifiedAt?: string | null;
 }
 
 interface MobileDevice {
-  deviceId: string;
-  userId: string;
+  employee_code: string;
+  device_id: string;
+  deviceId?: string;
+  name?: string;
   status: boolean;
+  login_status?: string;
   lastLocationAt?: string;
   createdAt?: string;
   address?: string | null;
   lat?: number | null;
   lng?: number | null;
-  _count?: {
-    locationLogs: number;
-  };
   faceProfile?: FaceProfile | null;
 }
 
 interface LocationHistoryItem {
   id: string;
+  employee_code?: string;
   lat: number;
   lng: number;
-  recordedAt: string;
+  recorded_date_time: string;
   accuracy?: number;
   address?: string | null;
 }
@@ -39,8 +42,6 @@ const Employees: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDevice, setSelectedDevice] = useState<MobileDevice | null>(null);
-  const [editingDevice, setEditingDevice] = useState<MobileDevice | null>(null);
-  const [editUserId, setEditUserId] = useState('');
 
   // Location History State
   const [historyModalUser, setHistoryModalUser] = useState<MobileDevice | null>(null);
@@ -102,10 +103,31 @@ const Employees: React.FC = () => {
 
   const fetchDevices = async () => {
     try {
-      const response = await apiClient.get('/mobile-users');
-      setDevices(response.data);
+      let response;
+      try {
+        response = await apiClient.get('/employees');
+      } catch {
+        response = await apiClient.get('/mobile-users');
+      }
+      if (response && response.data) {
+        const formatted = response.data.map((item: any) => ({
+          employee_code: item.employee_code || item.userId || 'EMP001',
+          device_id: item.device_id || item.deviceId || 'unknown',
+          deviceId: item.device_id || item.deviceId || 'unknown',
+          name: item.name || `Employee ${item.employee_code || item.userId || ''}`,
+          status: item.login_status ? item.login_status === 'Y' : Boolean(item.status),
+          login_status: item.login_status || (item.status ? 'Y' : 'N'),
+          lastLocationAt: item.lastLocationAt,
+          createdAt: item.createdAt,
+          address: item.address,
+          lat: item.lat,
+          lng: item.lng,
+          faceProfile: item.faceProfile,
+        }));
+        setDevices(formatted);
+      }
     } catch (err) {
-      console.error('Failed to fetch mobile devices', err);
+      console.error('Failed to fetch employee devices', err);
     } finally {
       setLoading(false);
     }
@@ -118,15 +140,15 @@ const Employees: React.FC = () => {
 
   const handleExportCSV = () => {
     if (!devices || devices.length === 0) {
-      alert('No device data available to export.');
+      alert('No employee data available to export.');
       return;
     }
 
-    const headers = ['User ID', 'Device Hardware ID (ANDROID_ID)', 'Status', 'Last Address', 'Last Latitude', 'Last Longitude', 'Last Ping'];
+    const headers = ['Employee Code', 'Employee Name', 'Device ID', 'Login Status', 'Last Address', 'Last Latitude', 'Last Longitude', 'Last Ping'];
     const csvContent = '\uFEFF' + [
       headers.join(','),
       ...devices.map(dev =>
-        `"${(dev.userId || 'N/A').replace(/"/g, '""')}","${(dev.deviceId || 'N/A').replace(/"/g, '""')}","${dev.status ? 'Active' : 'Offline'}","${(dev.address || 'N/A').replace(/"/g, '""')}",${dev.lat ?? 'N/A'},${dev.lng ?? 'N/A'},"${dev.lastLocationAt ? new Date(dev.lastLocationAt).toLocaleString() : 'Never'}"`
+        `"${(dev.employee_code || 'N/A').replace(/"/g, '""')}","${(dev.name || 'N/A').replace(/"/g, '""')}","${(dev.device_id || 'N/A').replace(/"/g, '""')}","${dev.status ? 'Active (Y)' : 'Offline (N)'}","${(dev.address || 'N/A').replace(/"/g, '""')}",${dev.lat ?? 'N/A'},${dev.lng ?? 'N/A'},"${dev.lastLocationAt ? new Date(dev.lastLocationAt).toLocaleString() : 'Never'}"`
       )
     ].join('\n');
 
@@ -134,7 +156,7 @@ const Employees: React.FC = () => {
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.href = url;
-    link.download = 'mobile_devices_export.csv';
+    link.download = 'hrms_employee_devices_export.csv';
     document.body.appendChild(link);
     link.click();
     setTimeout(() => {
@@ -143,26 +165,13 @@ const Employees: React.FC = () => {
     }, 100);
   };
 
-  const handleSaveEdit = async () => {
-    if (!editingDevice) return;
+  const handleDeleteDevice = async (employeeCode: string, deviceId: string) => {
+    if (!window.confirm(`Are you sure you want to remove registration for Employee ${employeeCode}?`)) return;
     try {
-      await apiClient.patch(`/mobile-users/${editingDevice.deviceId}`, {
-        userId: editUserId,
-      });
-      setEditingDevice(null);
+      await apiClient.delete(`/employees/${employeeCode}/${deviceId}`);
       fetchDevices();
     } catch (err) {
-      console.error('Failed to update device user ID', err);
-    }
-  };
-
-  const handleDeleteDevice = async (deviceId: string) => {
-    if (!window.confirm('Are you sure you want to remove this device registration?')) return;
-    try {
-      await apiClient.delete(`/mobile-users/${deviceId}`);
-      fetchDevices();
-    } catch (err) {
-      console.error('Failed to delete device', err);
+      console.error('Failed to delete profile', err);
     }
   };
 
@@ -171,8 +180,7 @@ const Employees: React.FC = () => {
     setLoadingHistory(true);
     setHistoryLogs([]);
     try {
-      const targetId = device.deviceId || device.userId;
-      // Use limit to fetch most recent 100 location logs
+      const targetId = device.employee_code || device.device_id;
       const response = await apiClient.get(`/tracking/history/${targetId}?limit=100`);
       if (response.data && Array.isArray(response.data)) {
         setHistoryLogs(response.data);
@@ -187,11 +195,11 @@ const Employees: React.FC = () => {
   const handleDownloadUserHistoryCsv = () => {
     if (!historyModalUser || !historyLogs || historyLogs.length === 0) return;
 
-    const headers = ['User ID', 'Device Hardware ID', 'Recorded Date & Time', 'Location Address', 'Latitude', 'Longitude', 'Accuracy (m)'];
+    const headers = ['Employee Code', 'Device ID', 'Recorded Date & Time', 'Location Address', 'Latitude', 'Longitude', 'Accuracy (m)'];
     const rows = historyLogs.map(log => [
-      `"${(historyModalUser.userId || 'N/A').replace(/"/g, '""')}"`,
-      `"${(historyModalUser.deviceId || 'N/A').replace(/"/g, '""')}"`,
-      `"${new Date(log.recordedAt).toLocaleString()}"`,
+      `"${(historyModalUser.employee_code || 'N/A').replace(/"/g, '""')}"`,
+      `"${(historyModalUser.device_id || 'N/A').replace(/"/g, '""')}"`,
+      `"${new Date(log.recorded_date_time).toLocaleString()}"`,
       `"${(log.address || 'N/A').replace(/"/g, '""')}"`,
       log.lat,
       log.lng,
@@ -203,7 +211,7 @@ const Employees: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${historyModalUser.userId}_location_history.csv`;
+    link.download = `${historyModalUser.employee_code}_location_history.csv`;
     document.body.appendChild(link);
     link.click();
     setTimeout(() => {
@@ -215,8 +223,9 @@ const Employees: React.FC = () => {
   const filteredDevices = devices.filter(dev => {
     const query = searchQuery.toLowerCase();
     return (
-      dev.deviceId.toLowerCase().includes(query) ||
-      (dev.userId && dev.userId.toLowerCase().includes(query))
+      dev.employee_code.toLowerCase().includes(query) ||
+      dev.device_id.toLowerCase().includes(query) ||
+      (dev.name && dev.name.toLowerCase().includes(query))
     );
   });
 
@@ -224,8 +233,8 @@ const Employees: React.FC = () => {
     <div className="page-container animate-fade-in">
       <header className="page-header flex justify-between items-center">
         <div>
-          <h1>Mobile Tracking Devices</h1>
-          <p className="text-secondary">Manage login-free Android tracking devices and auto-generated user IDs.</p>
+          <h1>HRMS Employee Field Devices</h1>
+          <p className="text-secondary">Manage HRMS employee profiles, login status, and field telemetry.</p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
           <button className="btn-secondary" style={{ width: 'auto' }} onClick={handleExportCSV}>
@@ -239,8 +248,8 @@ const Employees: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
           <Clock size={22} style={{ color: '#6366f1' }} />
           <div>
-            <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#fff' }}>Global Tracking & Security Settings</h4>
-            <p style={{ margin: 0, fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)' }}>Configure tracking frequency, face recognition intervals, and session grace periods for field devices.</p>
+            <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#fff' }}>Global HRMS System Setup</h4>
+            <p style={{ margin: 0, fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)' }}>Configure tracking frequency, face verification intervals, and session grace periods from system_setup_table.</p>
           </div>
         </div>
 
@@ -333,7 +342,7 @@ const Employees: React.FC = () => {
         </div>
 
         {intervalSavedMsg && (
-          <div style={{ marginTop: '16px', fontSize: '0.85rem', color: '#10b981', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', animation: 'fadeIn 0.3s' }}>
+          <div style={{ marginTop: '16px', fontSize: '0.85rem', color: '#10b981', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Check size={16} /> {intervalSavedMsg}
           </div>
         )}
@@ -350,50 +359,56 @@ const Employees: React.FC = () => {
               <X size={20} />
             </button>
             <div className="modal-header">
-              <h2 style={{ marginBottom: '16px' }}>Device Info</h2>
+              <h2 style={{ marginBottom: '16px' }}>Employee & Device Info</h2>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '8px' }}>
-                <p className="text-secondary" style={{ fontSize: '14px', marginBottom: '4px' }}>Android Hardware ID (`ANDROID_ID`)</p>
-                <p style={{ fontFamily: 'monospace', fontSize: '18px', color: '#60a5fa', wordBreak: 'break-all' }}>{selectedDevice.deviceId}</p>
+                <p className="text-secondary" style={{ fontSize: '14px', marginBottom: '4px' }}>Device ID (`device_id`)</p>
+                <p style={{ fontFamily: 'monospace', fontSize: '18px', color: '#60a5fa', wordBreak: 'break-all' }}>{selectedDevice.device_id}</p>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div>
-                  <p className="text-secondary" style={{ fontSize: '14px' }}>User ID</p>
-                  <p style={{ color: '#fff', fontFamily: 'monospace', fontWeight: 500 }}>{selectedDevice.userId}</p>
+                  <p className="text-secondary" style={{ fontSize: '14px' }}>Employee Code</p>
+                  <p style={{ color: '#fff', fontFamily: 'monospace', fontWeight: 700, fontSize: '16px' }}>{selectedDevice.employee_code}</p>
                 </div>
                 <div>
-                  <p className="text-secondary" style={{ fontSize: '14px' }}>Status</p>
-                  <p style={{ color: '#fff' }}>{selectedDevice.status ? 'Active' : 'Offline'}</p>
+                  <p className="text-secondary" style={{ fontSize: '14px' }}>Employee Name</p>
+                  <p style={{ color: '#fff', fontWeight: 600 }}>{selectedDevice.name}</p>
                 </div>
                 <div>
-                  <p className="text-secondary" style={{ fontSize: '14px' }}>Total Location Logs</p>
-                  <p style={{ color: '#fff' }}>{selectedDevice._count?.locationLogs ?? 0}</p>
+                  <p className="text-secondary" style={{ fontSize: '14px' }}>Login Status (`login_status`)</p>
+                  <p style={{ color: selectedDevice.status ? '#34d399' : '#f87171', fontWeight: 700 }}>
+                    {selectedDevice.status ? 'Active (Y)' : 'Offline (N)'}
+                  </p>
                 </div>
               </div>
 
               {/* Face Biometric Profiles Section */}
               {selectedDevice.faceProfile ? (
                 <div style={{ marginTop: '16px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '16px' }}>
-                  <p className="text-secondary" style={{ fontSize: '14px', marginBottom: '12px', fontWeight: 600 }}>Face Biometric Profiles</p>
+                  <p className="text-secondary" style={{ fontSize: '14px', marginBottom: '12px', fontWeight: 600 }}>Registered Biometric Profile</p>
                   
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                    {/* Registered / Enrollment Image */}
+                    {/* Registered Face Image */}
                     <div>
-                      <p className="text-secondary" style={{ fontSize: '12px', marginBottom: '8px' }}>Enrolled Reference Image</p>
+                      <p className="text-secondary" style={{ fontSize: '12px', marginBottom: '8px' }}>Registered Face Image</p>
                       <div style={{ width: '100%', aspectRatio: '1', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)', background: '#1e293b' }}>
-                        <img 
-                          src={selectedDevice.faceProfile.referenceImage.startsWith('data:') ? selectedDevice.faceProfile.referenceImage : `data:image/jpeg;base64,${selectedDevice.faceProfile.referenceImage}`} 
-                          alt="Enrolled reference" 
-                          style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                        />
+                        {(selectedDevice.faceProfile.registered_face_image || selectedDevice.faceProfile.referenceImage) ? (
+                          <img 
+                            src={(selectedDevice.faceProfile.registered_face_image || selectedDevice.faceProfile.referenceImage || '').startsWith('data:') ? (selectedDevice.faceProfile.registered_face_image || selectedDevice.faceProfile.referenceImage) : `data:image/jpeg;base64,${selectedDevice.faceProfile.registered_face_image || selectedDevice.faceProfile.referenceImage}`} 
+                            alt="Registered reference" 
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                          />
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'rgba(255,255,255,0.3)', fontSize: '12px' }}>No photo</div>
+                        )}
                       </div>
                     </div>
 
-                    {/* Last Login/Verification Image */}
+                    {/* Last Login Image */}
                     <div>
                       <p className="text-secondary" style={{ fontSize: '12px', marginBottom: '8px' }}>
-                        Last Verification Image
+                        Last Login Image
                         {selectedDevice.faceProfile.lastVerifiedAt && (
                           <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', display: 'block', marginTop: '2px' }}>
                             {new Date(selectedDevice.faceProfile.lastVerifiedAt).toLocaleString()}
@@ -401,10 +416,10 @@ const Employees: React.FC = () => {
                         )}
                       </p>
                       <div style={{ width: '100%', aspectRatio: '1', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)', background: '#1e293b' }}>
-                        {selectedDevice.faceProfile.lastLoginImage ? (
+                        {(selectedDevice.faceProfile.last_login_image || selectedDevice.faceProfile.lastLoginImage) ? (
                           <img 
-                            src={selectedDevice.faceProfile.lastLoginImage.startsWith('data:') ? selectedDevice.faceProfile.lastLoginImage : `data:image/jpeg;base64,${selectedDevice.faceProfile.lastLoginImage}`} 
-                            alt="Last verification" 
+                            src={(selectedDevice.faceProfile.last_login_image || selectedDevice.faceProfile.lastLoginImage || '')} 
+                            alt="Last login photo" 
                             style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                           />
                         ) : (
@@ -426,44 +441,6 @@ const Employees: React.FC = () => {
         </div>
       )}
 
-      {/* Edit User ID Modal */}
-      {editingDevice && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <button
-              onClick={() => setEditingDevice(null)}
-              className="modal-close"
-            >
-              <X size={20} />
-            </button>
-            <div className="modal-header">
-              <h2 style={{ marginBottom: '16px' }}>Edit User ID</h2>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div>
-                <label className="text-secondary" style={{ display: 'block', fontSize: '14px', marginBottom: '8px' }}>Custom User ID</label>
-                <input
-                  type="text"
-                  value={editUserId}
-                  onChange={(e) => setEditUserId(e.target.value)}
-                  className="input-field"
-                  style={{ fontFamily: 'monospace' }}
-                  placeholder="e.g. USR-1001"
-                />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
-                <button className="btn-secondary" style={{ width: 'auto' }} onClick={() => setEditingDevice(null)}>
-                  Cancel
-                </button>
-                <button className="btn-primary" style={{ width: 'auto' }} onClick={handleSaveEdit}>
-                  <Check size={16} className="inline mr-1" /> Save User ID
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Location History Modal */}
       {historyModalUser && (
         <div className="modal-overlay">
@@ -478,7 +455,7 @@ const Employees: React.FC = () => {
               <div>
                 <h2 style={{ marginBottom: '4px' }}>Location History</h2>
                 <p className="text-secondary" style={{ fontSize: '14px', margin: 0 }}>
-                  Showing recent location pings for <span style={{ fontFamily: 'monospace', color: '#fff' }}>{historyModalUser.userId}</span>
+                  Showing recent location pings for <span style={{ fontFamily: 'monospace', color: '#fff', fontWeight: 700 }}>{historyModalUser.employee_code}</span> ({historyModalUser.name})
                 </p>
               </div>
               {historyLogs.length > 0 && (
@@ -507,7 +484,7 @@ const Employees: React.FC = () => {
               {loadingHistory ? (
                 <div className="flex-center" style={{ padding: '48px 0', color: 'var(--text-secondary)' }}>Loading history...</div>
               ) : historyLogs.length === 0 ? (
-                <div className="flex-center" style={{ padding: '48px 0', color: 'var(--text-secondary)' }}>No location history found for this user.</div>
+                <div className="flex-center" style={{ padding: '48px 0', color: 'var(--text-secondary)' }}>No location history found for this employee.</div>
               ) : (
                 <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
                   <thead>
@@ -522,7 +499,7 @@ const Employees: React.FC = () => {
                     {historyLogs.map(log => (
                       <tr key={log.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', transition: 'background 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
                         <td style={{ padding: '14px 0', fontSize: '14px', color: '#fff' }}>
-                          {new Date(log.recordedAt).toLocaleString()}
+                          {new Date(log.recorded_date_time).toLocaleString()}
                         </td>
                         <td style={{ padding: '14px 0', fontSize: '14px', fontFamily: 'monospace', color: '#60a5fa' }}>{log.lat.toFixed(6)}</td>
                         <td style={{ padding: '14px 0', fontSize: '14px', fontFamily: 'monospace', color: '#60a5fa' }}>{log.lng.toFixed(6)}</td>
@@ -545,7 +522,7 @@ const Employees: React.FC = () => {
             <Search className="search-icon" />
             <input
               type="text"
-              placeholder="Search User ID or Hardware ID..."
+              placeholder="Search Employee Code, Name, or Device ID..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="search-input"
@@ -557,9 +534,10 @@ const Employees: React.FC = () => {
           <table className="data-table">
             <thead>
               <tr>
-                <th>User ID</th>
-                <th>Device Hardware ID</th>
-                <th>Status</th>
+                <th>Employee Code</th>
+                <th>Employee Name</th>
+                <th>Device ID</th>
+                <th>Login Status</th>
                 <th>Last Location Ping</th>
                 <th>Actions</th>
               </tr>
@@ -567,26 +545,29 @@ const Employees: React.FC = () => {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="text-center py-8">Loading devices...</td>
+                  <td colSpan={6} className="text-center py-8">Loading employees...</td>
                 </tr>
               ) : filteredDevices.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="text-center py-8">No registered mobile devices found.</td>
+                  <td colSpan={6} className="text-center py-8">No registered employee devices found.</td>
                 </tr>
               ) : filteredDevices.map((dev) => (
-                <tr key={dev.deviceId}>
+                <tr key={`${dev.employee_code}_${dev.device_id}`}>
                   <td>
                     <div className="flex items-center gap-2">
-                      <Smartphone size={16} className="text-blue-400" />
+                      <UserCheck size={16} className="text-blue-400" />
                       <button
-                        className="font-mono font-medium text-white hover:text-blue-400 hover:underline text-left transition-colors"
+                        className="font-mono font-bold text-white hover:text-blue-400 hover:underline text-left transition-colors"
                         onClick={() => handleOpenHistory(dev)}
                         title="View Location History"
                         style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}
                       >
-                        {dev.userId}
+                        {dev.employee_code}
                       </button>
                     </div>
+                  </td>
+                  <td>
+                    <span className="font-medium text-white">{dev.name}</span>
                   </td>
                   <td>
                     <button
@@ -594,12 +575,12 @@ const Employees: React.FC = () => {
                       onClick={() => setSelectedDevice(dev)}
                       style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}
                     >
-                      {dev.deviceId}
+                      {dev.device_id}
                     </button>
                   </td>
                   <td>
                     <span className={`status-badge ${dev.status ? 'active' : 'offline'}`}>
-                      {dev.status ? 'Active' : 'Offline'}
+                      {dev.status ? 'Active (Y)' : 'Offline (N)'}
                     </span>
                   </td>
                   <td className="text-secondary text-sm">
@@ -610,24 +591,14 @@ const Employees: React.FC = () => {
                       <button
                         className="icon-btn text-blue-400"
                         title="View Travel Route"
-                        onClick={() => navigate(`/dashboard/map?userId=${dev.deviceId}`)}
+                        onClick={() => navigate(`/dashboard/map?userId=${dev.employee_code}`)}
                       >
                         <Navigation size={16} />
                       </button>
                       <button
-                        className="icon-btn text-blue-400"
-                        title="Edit User ID"
-                        onClick={() => {
-                          setEditingDevice(dev);
-                          setEditUserId(dev.userId || '');
-                        }}
-                      >
-                        <Edit size={16} />
-                      </button>
-                      <button
                         className="icon-btn text-red-400"
-                        title="Delete Device"
-                        onClick={() => handleDeleteDevice(dev.deviceId)}
+                        title="Delete Employee Device Profile"
+                        onClick={() => handleDeleteDevice(dev.employee_code, dev.device_id)}
                       >
                         <Trash2 size={16} />
                       </button>

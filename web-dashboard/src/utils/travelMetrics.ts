@@ -29,7 +29,7 @@ export interface RouteTelemetryMetrics {
 export interface LocationPoint {
   lat: number;
   lng: number;
-  recordedAt: string;
+  recorded_date_time: string;
 }
 
 /**
@@ -67,8 +67,8 @@ export const calculateRouteMetrics = (
   }
 
   // 2. Calculate Travel Duration
-  const startTime = new Date(historyLogs[0].recordedAt).getTime();
-  const endTime = new Date(historyLogs[historyLogs.length - 1].recordedAt).getTime();
+  const startTime = new Date(historyLogs[0].recorded_date_time).getTime();
+  const endTime = new Date(historyLogs[historyLogs.length - 1].recorded_date_time).getTime();
   const diffMs = Math.max(0, endTime - startTime);
   const diffMins = Math.floor(diffMs / (1000 * 60));
   const hours = Math.floor(diffMins / 60);

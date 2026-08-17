@@ -70,7 +70,6 @@ fun FaceEnrollmentScreen(
             )
 
             if (isSuccess) {
-                // Success state
                 Box(
                     modifier = Modifier
                         .size(240.dp, 300.dp)
@@ -94,7 +93,6 @@ fun FaceEnrollmentScreen(
                     fontSize = 16.sp
                 )
             } else {
-                // Camera capture state
                 FaceCaptureCamera(
                     isCapturing = isProcessing,
                     captureButtonText = "📷 Enroll & Register Face Profile",
@@ -103,18 +101,12 @@ fun FaceEnrollmentScreen(
                         errorMessage = null
 
                         coroutineScope.launch {
-                            val deviceId = Settings.Secure.getString(
-                                context.contentResolver,
-                                Settings.Secure.ANDROID_ID
-                            ) ?: "unknown"
-                            val userId = sessionManager.getUserId()
-                                ?: "USR-${deviceId.takeLast(6).uppercase()}"
+                            val empCode = sessionManager.getEmployeeCode() ?: "EMP001"
 
-                            // Send face image to server for enrollment
-                            val success = faceAuthManager.enrollFaceWithServer(userId, base64Image)
+                            val result = faceAuthManager.enrollFaceWithServer(empCode, base64Image)
 
-                            if (success) {
-                                sessionManager.saveUserId(userId)
+                            if (result.first) {
+                                sessionManager.saveEmployeeCode(empCode)
                                 sessionManager.saveFaceEnrolled(true)
                                 sessionManager.recordFaceVerificationSuccess()
                                 isProcessing = false
@@ -124,7 +116,11 @@ fun FaceEnrollmentScreen(
                                 onEnrollmentComplete()
                             } else {
                                 isProcessing = false
-                                errorMessage = "Face enrollment failed. Please ensure your face is clearly visible and try again."
+                                errorMessage = if (!result.second.isNullOrBlank()) {
+                                    result.second
+                                } else {
+                                    "Face enrollment failed. Please ensure your face is clearly visible and try again."
+                                }
                             }
                         }
                     },
@@ -139,4 +135,3 @@ fun FaceEnrollmentScreen(
         }
     }
 }
-

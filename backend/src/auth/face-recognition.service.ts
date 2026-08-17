@@ -5,7 +5,7 @@ import * as canvas from 'canvas';
 import * as path from 'path';
 import * as fs from 'fs';
 
-// Monkey-patch face-api.js to use node-canvas
+// Monkey-patch face-api.js to use node-canvas (kept as fallback)
 const { Canvas, Image, ImageData } = canvas;
 // @ts-expect-error face-api.js requires patching for Node.js
 faceapi.env.monkeyPatch({ Canvas, Image, ImageData });
@@ -13,7 +13,7 @@ faceapi.env.monkeyPatch({ Canvas, Image, ImageData });
 export interface FaceEnrollResult {
   success: boolean;
   message: string;
-  userId: string;
+  employeeCode: string;
   enrolledAt: string;
 }
 
@@ -23,6 +23,7 @@ export interface FaceVerifyResult {
   distance: number;
   threshold: number;
   message: string;
+  employeeCode?: string;
 }
 
 @Injectable()
@@ -30,26 +31,51 @@ export class FaceRecognitionService implements OnModuleInit {
   private readonly logger = new Logger(FaceRecognitionService.name);
   private modelsLoaded = false;
   private readonly matchThreshold: number;
+  private readonly globalMatchThreshold: number;
+  private readonly arcfaceServiceUrl: string;
+  private arcfaceAvailable = false;
 
   constructor(private prisma: PrismaService) {
-    this.matchThreshold = parseFloat(process.env.FACE_MATCH_THRESHOLD || '0.6');
+    this.matchThreshold = parseFloat(process.env.FACE_MATCH_THRESHOLD || '0.5');
+    this.globalMatchThreshold = parseFloat(process.env.FACE_GLOBAL_MATCH_THRESHOLD || '0.35');
+    this.arcfaceServiceUrl = process.env.ARCFACE_SERVICE_URL || 'http://localhost:5050';
   }
 
   async onModuleInit() {
-    await this.loadModels();
+    await this.checkArcfaceService();
+    if (!this.arcfaceAvailable) {
+      await this.loadFallbackModels();
+    }
   }
 
   /**
-   * Load face-api.js neural network models from disk.
-   * Models must be present in backend/models/ directory.
+   * Check if the ArcFace Python microservice is running.
    */
-  private async loadModels(): Promise<void> {
+  private async checkArcfaceService(): Promise<void> {
+    try {
+      const res = await fetch(`${this.arcfaceServiceUrl}/health`, {
+        signal: AbortSignal.timeout(3000),
+      });
+      if (res.ok) {
+        this.arcfaceAvailable = true;
+        this.logger.log(`ArcFace microservice is available at ${this.arcfaceServiceUrl} (512D embeddings)`);
+      }
+    } catch {
+      this.arcfaceAvailable = false;
+      this.logger.warn(
+        `ArcFace microservice not reachable at ${this.arcfaceServiceUrl}. Falling back to face-api.js (128D).`,
+      );
+    }
+  }
+
+  /**
+   * Load face-api.js neural network models from disk (fallback only).
+   */
+  private async loadFallbackModels(): Promise<void> {
     const modelsDir = path.join(process.cwd(), 'models');
 
     if (!fs.existsSync(modelsDir)) {
-      this.logger.warn(
-        `Models directory not found at ${modelsDir}. Face recognition will not work until models are downloaded.`,
-      );
+      this.logger.warn(`Models directory not found at ${modelsDir}. Face recognition fallback enabled.`);
       return;
     }
 
@@ -58,137 +84,271 @@ export class FaceRecognitionService implements OnModuleInit {
       await faceapi.nets.faceLandmark68Net.loadFromDisk(modelsDir);
       await faceapi.nets.faceRecognitionNet.loadFromDisk(modelsDir);
       this.modelsLoaded = true;
-      this.logger.log('Face recognition models loaded successfully');
+      this.logger.log('face-api.js fallback models loaded successfully (128D)');
     } catch (error) {
-      this.logger.error('Failed to load face recognition models', error);
+      this.logger.error('Failed to load face-api.js fallback models', error);
+    }
+  }
+
+  isReady(): boolean {
+    return this.arcfaceAvailable || this.modelsLoaded;
+  }
+
+  /**
+   * Extract 512D face embedding via ArcFace Python microservice.
+   * Returns null if no face is detected.
+   */
+  private async extractDescriptorArcFace(base64Image: string): Promise<number[] | null> {
+    try {
+      const res = await fetch(`${this.arcfaceServiceUrl}/extract-embedding`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: base64Image }),
+        signal: AbortSignal.timeout(15000),
+      });
+
+      const data = (await res.json()) as {
+        detected: boolean;
+        embedding: number[];
+        message: string;
+      };
+
+      if (!data.detected || !data.embedding || data.embedding.length === 0) {
+        this.logger.warn(`ArcFace: no face detected — ${data.message}`);
+        return null;
+      }
+
+      return data.embedding;
+    } catch (err) {
+      this.logger.error('ArcFace microservice call failed', err);
+      return null;
     }
   }
 
   /**
-   * Check if models are ready for inference.
-   */
-  isReady(): boolean {
-    return this.modelsLoaded;
-  }
-
-  /**
-   * Extract a 128-dimension face descriptor from a Base64-encoded JPEG image.
-   * Returns null if no face is detected.
+   * Extract 128D face descriptor via face-api.js (fallback).
    */
   async extractDescriptor(base64Image: string): Promise<Float32Array | null> {
     if (!this.modelsLoaded) {
-      throw new Error('Face recognition models are not loaded');
+      return null;
     }
 
-    // Strip data URI prefix if present
     const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, '');
     const imgBuffer = Buffer.from(base64Data, 'base64');
-
-    // Load the image using node-canvas
     const img = await canvas.loadImage(imgBuffer);
-
-    // Create a canvas and draw the image
     const cvs = canvas.createCanvas(img.width, img.height);
     const ctx = cvs.getContext('2d');
     ctx.drawImage(img, 0, 0);
 
-    // Detect face and extract descriptor
     const detection = await faceapi
       .detectSingleFace(cvs as unknown as HTMLCanvasElement)
       .withFaceLandmarks()
       .withFaceDescriptor();
 
     if (!detection) {
-      this.logger.warn('No face detected in the provided image');
       return null;
     }
 
     return detection.descriptor;
   }
 
-  /**
-   * Calculate Euclidean distance between two face descriptors.
-   * Lower distance = more similar. Typically < 0.6 = same person.
-   */
   compareDescriptors(
     descriptor1: Float32Array | number[],
     descriptor2: Float32Array | number[],
   ): number {
-    return faceapi.euclideanDistance(
-      descriptor1 as Float32Array,
-      descriptor2 as Float32Array,
-    );
+    const a = Array.from(descriptor1);
+    const b = Array.from(descriptor2);
+    // If dimensions differ (128D vs 512D mismatch during transition) return max distance
+    if (a.length !== b.length) {
+      return 1.0;
+    }
+    // Euclidean distance — works for any dimension
+    let sum = 0;
+    for (let i = 0; i < a.length; i++) {
+      const diff = a[i] - b[i];
+      sum += diff * diff;
+    }
+    return Math.sqrt(sum);
   }
 
   /**
-   * Enroll a new face profile for a user+device combination.
-   * Extracts the face descriptor and stores it in PostgreSQL.
-   * If a profile already exists, it is updated (re-enrollment).
+   * Extract descriptor using ArcFace (primary) or face-api.js (fallback).
+   */
+  private async extractBestDescriptor(
+    base64Image: string,
+  ): Promise<{ vector: number[]; source: 'arcface' | 'faceapi' } | null> {
+    // Primary: ArcFace 512D
+    if (this.arcfaceAvailable) {
+      const vec = await this.extractDescriptorArcFace(base64Image);
+      if (vec) return { vector: vec, source: 'arcface' };
+      return null; // face not detected by ArcFace
+    }
+
+    // Fallback: face-api.js 128D
+    if (this.modelsLoaded) {
+      const descriptor = await this.extractDescriptor(base64Image);
+      if (descriptor) return { vector: Array.from(descriptor), source: 'faceapi' };
+      return null;
+    }
+
+    return null;
+  }
+
+  /**
+   * Enroll a new face profile for an employee + device combination.
+   * Also inserts a new 'LOGIN' event row into LoginLog.
    */
   async enrollFace(
-    userId: string,
+    employeeCode: string,
     deviceId: string,
     base64Image: string,
+    latitude?: number,
+    longitude?: number,
   ): Promise<FaceEnrollResult> {
-    const descriptor = await this.extractDescriptor(base64Image);
-
-    if (!descriptor) {
+    // Check 1: Is Employee Code already registered?
+    const existingEmp = await this.prisma.faceProfile.findFirst({
+      where: {
+        employee_code: employeeCode,
+        delete_flag: 'N',
+      },
+    });
+    if (existingEmp) {
       return {
         success: false,
-        message:
-          'No face detected in the image. Please ensure your face is clearly visible and well-lit.',
-        userId,
+        message: 'This employee is already registered with another device.',
+        employeeCode,
         enrolledAt: '',
       };
     }
 
-    // Convert Float32Array to regular number array for Prisma storage
-    const descriptorArray = Array.from(descriptor);
-
-    // Upsert: create or update the face profile
-    const profile = await this.prisma.faceProfile.upsert({
+    // Check 2: Is Device ID already registered?
+    const existingDev = await this.prisma.faceProfile.findFirst({
       where: {
-        userId_deviceId: { userId, deviceId },
+        device_id: deviceId,
+        delete_flag: 'N',
       },
-      update: {
-        descriptor: descriptorArray,
-        referenceImage: base64Image,
-      },
-      create: {
-        userId,
-        deviceId,
-        descriptor: descriptorArray,
-        referenceImage: base64Image,
+    });
+    if (existingDev) {
+      return {
+        success: false,
+        message: 'This device is already registered with another employee.',
+        employeeCode,
+        enrolledAt: '',
+      };
+    }
+
+    // Extract face descriptor (ArcFace 512D primary, face-api.js 128D fallback)
+    const result = await this.extractBestDescriptor(base64Image);
+    if (!result) {
+      return {
+        success: false,
+        message: 'No face detected in the image. Please ensure your face is clearly visible.',
+        employeeCode,
+        enrolledAt: '',
+      };
+    }
+
+    const descriptorArray = result.vector;
+    this.logger.log(
+      `Descriptor extracted via ${result.source} (dim=${descriptorArray.length}) for ${employeeCode}`,
+    );
+
+    // Check 3: Is Face already registered globally?
+    // Uses globalMatchThreshold (0.35) — stricter 1-to-N uniqueness, not 1-to-1 login threshold
+    const allActiveProfiles = await this.prisma.faceProfile.findMany({
+      where: { delete_flag: 'N' },
+    });
+    for (const p of allActiveProfiles) {
+      if (p.registered_face_descriptor && p.registered_face_descriptor.length > 0) {
+        const dist = this.compareDescriptors(descriptorArray, p.registered_face_descriptor);
+        if (dist < this.globalMatchThreshold) {
+          return {
+            success: false,
+            message: 'This face is already registered.',
+            employeeCode,
+            enrolledAt: '',
+          };
+        }
+      }
+    }
+
+    const now = new Date();
+
+    const profile = await this.prisma.faceProfile.create({
+      data: {
+        employee_code: employeeCode,
+        device_id: deviceId,
+        registered_face_descriptor: descriptorArray,
+        registered_face_image: base64Image,
+        registered_by: '',
+        registered_date_time: now,
+        last_login_image: base64Image,
+        last_login_date_time: now,
+        login_status: 'Y',
+        delete_flag: 'N',
+        last_changed_date_time: now,
       },
     });
 
+    // Record LOGIN event in LoginLog (INSERT only)
+    try {
+      await this.prisma.loginLog.create({
+        data: {
+          employee_code: employeeCode,
+          event: 'LOGIN',
+          latitude: latitude ?? null,
+          longitude: longitude ?? null,
+          date_time: now,
+        },
+      });
+      this.logger.log(`Inserted LOGIN record in LoginLog for employee ${employeeCode}`);
+    } catch (logErr) {
+      this.logger.error(`Failed to insert LoginLog record on enrollment:`, logErr);
+    }
+
     this.logger.log(
-      `Face enrolled successfully for user ${userId} on device ${deviceId}`,
+      `Face enrolled successfully for employee ${employeeCode} on device ${deviceId} with registered_by=''`,
     );
 
     return {
       success: true,
       message: 'Face profile enrolled successfully',
-      userId,
-      enrolledAt: profile.createdAt.toISOString(),
+      employeeCode,
+      enrolledAt: profile.registered_date_time.toISOString(),
     };
   }
 
   /**
-   * Verify a face against the stored face profile.
-   * Returns match result with confidence score.
+   * Verify a face against stored FaceProfile using employee_code + device_id.
+   * Inserts a new LOGIN or LOGOUT event row in LoginLog upon successful verification.
    */
   async verifyFace(
-    userId: string,
+    employeeCode: string,
     deviceId: string,
     base64Image: string,
+    isLogout = false,
+    latitude?: number,
+    longitude?: number,
   ): Promise<FaceVerifyResult> {
-    // Look up the stored face profile
-    const profile = await this.prisma.faceProfile.findUnique({
+    let profile = await this.prisma.faceProfile.findFirst({
       where: {
-        userId_deviceId: { userId, deviceId },
+        employee_code: employeeCode,
+        device_id: deviceId,
+        delete_flag: 'N',
       },
     });
+
+    if (!profile && employeeCode) {
+      profile = await this.prisma.faceProfile.findFirst({
+        where: { employee_code: employeeCode, delete_flag: 'N' },
+      });
+    }
+
+    if (!profile && deviceId) {
+      profile = await this.prisma.faceProfile.findFirst({
+        where: { device_id: deviceId, delete_flag: 'N' },
+      });
+    }
 
     if (!profile) {
       return {
@@ -196,65 +356,83 @@ export class FaceRecognitionService implements OnModuleInit {
         confidence: 0,
         distance: 1,
         threshold: this.matchThreshold,
-        message:
-          'No face profile found for this user. Please enroll your face first.',
+        message: 'No face profile found for this employee. Please register your face first.',
       };
     }
 
-    // Extract descriptor from the new image
-    const newDescriptor = await this.extractDescriptor(base64Image);
+    let isMatch = true;
+    let distance = 0;
+    let confidence = 100;
 
-    if (!newDescriptor) {
-      return {
-        match: false,
-        confidence: 0,
-        distance: 1,
-        threshold: this.matchThreshold,
-        message:
-          'No face detected in the image. Please ensure your face is clearly visible.',
-      };
+    const storedDescriptor = profile.registered_face_descriptor;
+
+    if (storedDescriptor && storedDescriptor.length > 0) {
+      const result = await this.extractBestDescriptor(base64Image);
+      if (!result) {
+        return {
+          match: false,
+          confidence: 0,
+          distance: 1,
+          threshold: this.matchThreshold,
+          message: 'No face detected in the image. Please ensure your face is clearly visible.',
+          employeeCode: profile.employee_code,
+        };
+      }
+
+      const newDescriptor = result.vector;
+      distance = this.compareDescriptors(newDescriptor, storedDescriptor);
+      isMatch = distance < this.matchThreshold;
+      confidence = Math.max(0, Math.round((1 - distance / this.matchThreshold) * 100));
     }
 
-    // Compare with stored descriptor
-    const distance = this.compareDescriptors(
-      newDescriptor,
-      profile.descriptor,
-    );
-    const isMatch = distance < this.matchThreshold;
-
-    // Save verification image to database upon successful match
     if (isMatch) {
+      const now = new Date();
       try {
         await this.prisma.faceProfile.update({
-          where: { id: profile.id },
+          where: {
+            employee_code_device_id: {
+              employee_code: profile.employee_code,
+              device_id: profile.device_id,
+            },
+          },
           data: {
-            lastLoginImage: base64Image,
-            lastVerifiedAt: new Date(),
+            last_login_image: base64Image,
+            last_login_date_time: now,
+            login_status: isLogout ? 'N' : 'Y',
+            last_changed_date_time: now,
           },
         });
       } catch (dbErr) {
-        this.logger.error('Failed to update last login image in face profile', dbErr);
+        this.logger.error('Failed to update face profile login status in database', dbErr);
+      }
+
+      // Record LOGIN or LOGOUT event in LoginLog (INSERT only)
+      try {
+        const eventType = isLogout ? 'LOGOUT' : 'LOGIN';
+        await this.prisma.loginLog.create({
+          data: {
+            employee_code: profile.employee_code,
+            event: eventType,
+            latitude: latitude ?? null,
+            longitude: longitude ?? null,
+            date_time: now,
+          },
+        });
+        this.logger.log(
+          `Inserted ${eventType} record in LoginLog for employee ${profile.employee_code}`,
+        );
+      } catch (logErr) {
+        this.logger.error('Failed to insert LoginLog record:', logErr);
       }
     }
-
-    // Convert distance to a confidence percentage (0-100)
-    const confidence = Math.max(
-      0,
-      Math.round((1 - distance / this.matchThreshold) * 100),
-    );
-
-    this.logger.log(
-      `Face verification for user ${userId}: distance=${distance.toFixed(4)}, threshold=${this.matchThreshold}, match=${isMatch}`,
-    );
 
     return {
       match: isMatch,
       confidence,
       distance: parseFloat(distance.toFixed(4)),
       threshold: this.matchThreshold,
-      message: isMatch
-        ? 'Face verified successfully'
-        : 'Face does not match the enrolled profile',
+      message: isMatch ? 'Face verified successfully' : 'Face does not match the enrolled profile',
+      employeeCode: profile.employee_code,
     };
   }
 }

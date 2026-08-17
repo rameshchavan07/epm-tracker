@@ -17,7 +17,7 @@ interface LatestLocation {
   status: 'Active' | 'Offline';
   lat: number;
   lng: number;
-  recordedAt: string;
+  recorded_date_time: string;
 }
 
 const Overview: React.FC = () => {
@@ -44,6 +44,7 @@ const Overview: React.FC = () => {
   }, []);
 
   const formatTime = (isoString: string) => {
+    if (!isoString) return '--:--';
     const date = new Date(isoString);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
@@ -126,14 +127,14 @@ const Overview: React.FC = () => {
                     >
                       <td className="font-medium">{log.name}</td>
                       <td className="text-secondary text-sm">
-                        {log.lat.toFixed(4)}, {log.lng.toFixed(4)}
+                        {log.lat ? log.lat.toFixed(4) : '0.0000'}, {log.lng ? log.lng.toFixed(4) : '0.0000'}
                       </td>
                       <td>
                         <span className={`status-badge badge-${log.status === 'Active' ? 'success' : 'danger'}`}>
                           {log.status}
                         </span>
                       </td>
-                      <td className="text-secondary text-sm">{formatTime(log.recordedAt)}</td>
+                      <td className="text-secondary text-sm">{formatTime(log.recorded_date_time)}</td>
                     </tr>
                   ))
                 ) : (

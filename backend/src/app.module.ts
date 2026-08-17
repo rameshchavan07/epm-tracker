@@ -6,7 +6,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { TrackingModule } from './tracking/tracking.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
-import { MobileUsersModule } from './mobile-users/mobile-users.module';
+import { EmployeesModule } from './employees/employees.module';
 
 @Module({
   imports: [
@@ -15,7 +15,7 @@ import { MobileUsersModule } from './mobile-users/mobile-users.module';
     TrackingModule,
     AuthModule,
     UsersModule,
-    MobileUsersModule,
+    EmployeesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

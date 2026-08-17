@@ -3,10 +3,8 @@ package com.epm.tracking.worker
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import android.provider.Settings
 import com.epm.tracking.data.ApiClient
 import com.epm.tracking.data.LocationBatchRequest
-import com.epm.tracking.data.SessionManager
 import com.epm.tracking.data.local.AppDatabase
 
 class SyncWorker(
@@ -16,7 +14,6 @@ class SyncWorker(
 
     override suspend fun doWork(): Result {
         val database = AppDatabase.getDatabase(applicationContext)
-        val deviceId = Settings.Secure.getString(applicationContext.contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
 
         return try {
             val unsyncedLocations = database.locationDao().getUnsyncedLocations()
@@ -27,20 +24,17 @@ class SyncWorker(
             val apiService = ApiClient.getService()
             val batchRequest = unsyncedLocations.map { loc ->
                 LocationBatchRequest(
-                    deviceId     = loc.deviceId.ifEmpty { deviceId },
-                    mobileUserId = loc.userId,
-                    latitude  = loc.latitude,
-                    longitude = loc.longitude,
-                    accuracy  = loc.accuracy,
-                    address         = loc.address,
-                    intervalMinutes = loc.intervalMinutes,
-                    timestamp       = loc.timestamp
+                    employeeCode = loc.employeeCode,
+                    latitude     = loc.latitude,
+                    longitude    = loc.longitude,
+                    accuracy     = loc.accuracy,
+                    address      = loc.address,
+                    timestamp    = loc.timestamp
                 )
             }
 
             val response = apiService.syncLocations(batchRequest)
             if (response.success) {
-                // Delete rows that were successfully uploaded
                 database.locationDao().deleteLocations(unsyncedLocations.map { it.id })
                 Result.success()
             } else {

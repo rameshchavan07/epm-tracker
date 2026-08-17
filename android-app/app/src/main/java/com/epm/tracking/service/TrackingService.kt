@@ -11,6 +11,7 @@ import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import com.epm.tracking.data.ApiClient
 import com.epm.tracking.data.LocationBatchRequest
+import com.epm.tracking.data.OfflineRequest
 import com.epm.tracking.data.SessionManager
 import com.epm.tracking.data.local.AppDatabase
 import com.epm.tracking.data.local.entity.LocationEntity
@@ -34,9 +35,6 @@ class TrackingService : Service() {
     private lateinit var locationClient: LocationClient
     private var lastSavedTimestamp: Long = 0L
     private var isAutoVerifying = false
-
-    // How often to request a location fix (2 minutes)
-    private val trackingInterval = 120000L
 
     override fun onBind(p0: Intent?): IBinder? = null
 
@@ -69,7 +67,7 @@ class TrackingService : Service() {
         }
 
         val notification = NotificationCompat.Builder(this, "tracking_channel")
-            .setContentTitle("EMP Tracking")
+            .setContentTitle("EPM Tracking")
             .setContentText("Tracking your location...")
             .setSmallIcon(android.R.drawable.sym_def_app_icon)
             .setOngoing(true)
@@ -98,11 +96,7 @@ class TrackingService : Service() {
             }
         }
 
-        // Use the dynamically synced tracking interval
         val trackingInterval = sessionManager.getTrackingInterval()
-
-        // Resolve the logged-in user's real ID and device ID
-        val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
 
         locationClient.getLocationUpdates(trackingInterval)
             .catch { e ->
@@ -120,7 +114,9 @@ class TrackingService : Service() {
                     sendBroadcast(logoutIntent)
                     stop()
                     return@onEach
-                }                // Check if face verification is due (2 hours elapsed)
+                }
+
+                // Check if face verification is due (2 hours elapsed)
                 if (sessionManager.isFaceVerificationDue()) {
                     sessionManager.startPendingVerificationGracePeriod()
 
@@ -128,49 +124,42 @@ class TrackingService : Service() {
                         isAutoVerifying = true
                         serviceScope.launch {
                             try {
-                                val currentUserId = sessionManager.getUserId() ?: "USR-${deviceId.takeLast(6).uppercase()}"
+                                val currentEmpCode = sessionManager.getEmployeeCode() ?: "EMP001"
                                 android.util.Log.d("EPM_FACE_LOG", "Background face verification due. Triggering silent camera capture...")
                                 val base64 = BackgroundCameraHelper.captureFaceInBackground(applicationContext)
                                 if (base64 != null) {
-                                    android.util.Log.d("EPM_FACE_LOG", "Background photo captured. Querying server face verification for User ID: $currentUserId")
+                                    android.util.Log.d("EPM_FACE_LOG", "Background photo captured. Querying server face verification for Employee Code: $currentEmpCode")
                                     val faceAuthManager = FaceAuthManager(applicationContext)
-                                    val response = faceAuthManager.verifyFaceWithServer(currentUserId, base64)
+                                    val response = faceAuthManager.verifyFaceWithServer(currentEmpCode, base64)
                                     if (response != null && response.match) {
                                         android.util.Log.i("EPM_FACE_LOG", "Background automatic face verification succeeded! Confidence: ${response.confidence}%")
-                                        // Silent verification success! Extend session.
                                         sessionManager.recordFaceVerificationSuccess()
-                                        
-                                        // Reset warning notification to normal tracking text
                                         val normalNotif = notification.setContentText("Tracking your location...")
                                         notificationManager.notify(1, normalNotif.build())
                                     } else {
                                         android.util.Log.w("EPM_FACE_LOG", "Background face verification mismatch: ${response?.confidence}% - ${response?.message}")
-                                        // Face mismatch
                                         BuzzerManager.playBuzzer(applicationContext)
                                         val warningNotif = notification.setContentText("⚠️ Face Verification Required! Please open app.")
                                         notificationManager.notify(1, warningNotif.build())
                                     }
                                 } else {
-                                    android.util.Log.e("EPM_FACE_LOG", "Background face capture failed (camera blocked, device in pocket, or dark environment)")
-                                    // Camera failed to capture in background (e.g. device is in pocket or blocked)
+                                    android.util.Log.e("EPM_FACE_LOG", "Background face capture failed")
                                     BuzzerManager.playBuzzer(applicationContext)
                                     val warningNotif = notification.setContentText("⚠️ Face Verification Required! Please open app.")
                                     notificationManager.notify(1, warningNotif.build())
                                 }
                             } catch (e: Exception) {
-                                android.util.Log.e("EPM_FACE_LOG", "Background verification process encountered an exception", e)
+                                android.util.Log.e("EPM_FACE_LOG", "Background verification process exception", e)
                             } finally {
                                 isAutoVerifying = false
                             }
                         }
                     } else {
-                        android.util.Log.d("EPM_FACE_LOG", "Face verification due, but background camera capture is already in progress.")
-                        // Already auto-verifying: beep buzzer as a persistent reminder
                         BuzzerManager.playBuzzer(applicationContext)
                     }
                 }
 
-                // Filter out low-accuracy locations (accuracy radius > 40m)
+                // Filter out low-accuracy locations (> 40m)
                 if (location.hasAccuracy() && location.accuracy > 40f) {
                     return@onEach
                 }
@@ -178,7 +167,7 @@ class TrackingService : Service() {
                 val activeInterval = sessionManager.getTrackingInterval()
                 val now = System.currentTimeMillis()
 
-                // Throttle updates that arrive faster than the active interval (with 5-sec buffer)
+                // Throttle updates that arrive faster than the active interval
                 if (lastSavedTimestamp > 0 && (now - lastSavedTimestamp) < (activeInterval - 5000L)) {
                     return@onEach
                 }
@@ -189,7 +178,6 @@ class TrackingService : Service() {
                 val accuracy = location.accuracy
                 val timestamp = location.time
 
-                // Resolve location name / address using Geocoder
                 val addressName = try {
                     val geocoder = android.location.Geocoder(applicationContext, java.util.Locale.getDefault())
                     @Suppress("DEPRECATION")
@@ -202,57 +190,48 @@ class TrackingService : Service() {
                     null
                 }
 
-                val currentIntervalMinutes = (trackingInterval / 60000L).toInt().coerceAtLeast(1)
-                val currentUserId = sessionManager.getUserId() ?: "USR-${deviceId.takeLast(6).uppercase()}"
+                val currentEmpCode = sessionManager.getEmployeeCode() ?: "EMP001"
 
-                // 1. Persist to local Room DB (survives offline / app kill)
+                // 1. Persist to Room DB
                 db.locationDao().insertLocation(
                     LocationEntity(
-                        userId          = currentUserId,
-                        deviceId        = deviceId,
-                        latitude        = lat,
-                        longitude       = lng,
-                        accuracy        = accuracy,
-                        address         = addressName,
-                        intervalMinutes = currentIntervalMinutes,
-                        timestamp       = timestamp,
-                        isSynced        = false
+                        employeeCode = currentEmpCode,
+                        latitude     = lat,
+                        longitude    = lng,
+                        accuracy     = accuracy,
+                        address      = addressName,
+                        timestamp    = timestamp,
+                        isSynced     = false
                     )
                 )
 
-                    // 2. Immediately try to push to the backend server
-                    serviceScope.launch {
-                        try {
-                            val unsynced = db.locationDao().getUnsyncedLocations()
-                            if (unsynced.isEmpty()) return@launch
+                // 2. Immediately try to push to backend server
+                serviceScope.launch {
+                    try {
+                        val unsynced = db.locationDao().getUnsyncedLocations()
+                        if (unsynced.isEmpty()) return@launch
 
-                            val batchRequest = unsynced.map { loc ->
-                                LocationBatchRequest(
-                                    deviceId        = loc.deviceId.ifEmpty { deviceId },
-                                    mobileUserId    = loc.userId,
-                                    latitude        = loc.latitude,
-                                    longitude       = loc.longitude,
-                                    accuracy        = loc.accuracy,
-                                    address         = loc.address,
-                                    intervalMinutes = loc.intervalMinutes ?: currentIntervalMinutes,
-                                    timestamp       = loc.timestamp
-                                )
-                            }
-
-                            val apiService = ApiClient.getService()
-                            val response = apiService.syncLocations(batchRequest)
-                            
-                            // If server accepted it, delete only the ones we just sent
-                            if (response.success) {
-                                db.locationDao().deleteLocations(unsynced.map { it.id })
-                            }
-                        } catch (e: Exception) {
-                            // Network unavailable — SyncWorker will retry later
-                            e.printStackTrace()
+                        val batchRequest = unsynced.map { loc ->
+                            LocationBatchRequest(
+                                employeeCode = loc.employeeCode,
+                                latitude     = loc.latitude,
+                                longitude    = loc.longitude,
+                                accuracy     = loc.accuracy,
+                                address      = loc.address,
+                                timestamp    = loc.timestamp
+                            )
                         }
-                    }
 
-                // 3. Update notification with live address / coordinates
+                        val apiService = ApiClient.getService()
+                        val response = apiService.syncLocations(batchRequest)
+                        if (response.success) {
+                            db.locationDao().deleteLocations(unsynced.map { it.id })
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+
                 val displayText = if (!addressName.isNullOrBlank()) "📍 $addressName" else "📍 ${"%.5f".format(lat)}, ${"%.5f".format(lng)}"
                 val updatedNotification = notification.setContentText(displayText)
                 notificationManager.notify(1, updatedNotification.build())
@@ -267,11 +246,13 @@ class TrackingService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        val sessionManager = SessionManager(applicationContext)
+        val empCode = sessionManager.getEmployeeCode()
         val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
         @Suppress("OPT_IN_USAGE")
         GlobalScope.launch(Dispatchers.IO) {
             try {
-                ApiClient.getService().markOffline(com.epm.tracking.data.OfflineRequest(deviceId))
+                ApiClient.getService().markOffline(OfflineRequest(employeeCode = empCode, deviceId = deviceId))
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -285,4 +266,3 @@ class TrackingService : Service() {
         const val ACTION_SESSION_EXPIRED = "com.epm.tracking.ACTION_SESSION_EXPIRED"
     }
 }
-

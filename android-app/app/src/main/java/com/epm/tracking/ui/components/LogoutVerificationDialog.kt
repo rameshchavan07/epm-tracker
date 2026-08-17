@@ -19,6 +19,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.epm.tracking.auth.FaceAuthManager
 import com.epm.tracking.data.SessionManager
+import com.epm.tracking.location.getOneTimeLocation
 import kotlinx.coroutines.launch
 
 @Composable
@@ -33,7 +34,7 @@ fun LogoutVerificationDialog(
 
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isProcessing by remember { mutableStateOf(false) }
-    
+
     val activity = context as? androidx.fragment.app.FragmentActivity
 
     Dialog(
@@ -71,7 +72,7 @@ fun LogoutVerificationDialog(
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
-                    
+
                     TextButton(onClick = onDismiss) {
                         Text("Cancel", color = Color(0xFF94A3B8), fontSize = 14.sp)
                     }
@@ -86,7 +87,6 @@ fun LogoutVerificationDialog(
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
 
-                // Embedded camera for face capture
                 FaceCaptureCamera(
                     isCapturing = isProcessing,
                     captureButtonText = "Scan Face to Logout",
@@ -95,18 +95,24 @@ fun LogoutVerificationDialog(
                         errorMessage = null
 
                         coroutineScope.launch {
-                            val userId = sessionManager.getUserId() ?: "unknown"
+                            val locationPair = context.getOneTimeLocation()
+                            val lat = locationPair?.first
+                            val lon = locationPair?.second
+                            val empCode = sessionManager.getEmployeeCode() ?: "EMP001"
 
-                            android.util.Log.d("EPM_FACE_LOG", "Starting logout face verification for User ID: $userId")
-                            // Try server-side verification first
-                            val result = faceAuthManager.verifyFaceWithServer(userId, base64Image)
+                            val result = faceAuthManager.verifyFaceWithServer(
+                                employeeCode = empCode,
+                                base64Image = base64Image,
+                                isLogout = true,
+                                latitude = lat,
+                                longitude = lon
+                            )
+
 
                             if (result != null && result.match) {
-                                android.util.Log.i("EPM_FACE_LOG", "Logout face verification succeeded! Confidence: ${result.confidence}%")
                                 isProcessing = false
                                 onVerificationSuccess()
                             } else if (result != null) {
-                                android.util.Log.w("EPM_FACE_LOG", "Logout face verification failed! Confidence: ${result.confidence}% - Server message: ${result.message}")
                                 isProcessing = false
                                 errorMessage = if (result.confidence == 0) {
                                     result.message
@@ -114,8 +120,6 @@ fun LogoutVerificationDialog(
                                     "Face does not match (${result.confidence}% confidence). Try again."
                                 }
                             } else {
-                                android.util.Log.e("EPM_FACE_LOG", "Server unreachable on logout. Attempting offline local biometric fallback...")
-                                // Network error — fallback to local biometric
                                 isProcessing = false
                                 if (activity != null) {
                                     faceAuthManager.authenticate(
@@ -123,16 +127,13 @@ fun LogoutVerificationDialog(
                                         title = "Verify Identity to Logout",
                                         subtitle = "Server unreachable. Using local biometric verification.",
                                         onSuccess = {
-                                            android.util.Log.i("EPM_FACE_LOG", "Offline logout biometric verification succeeded!")
                                             onVerificationSuccess()
                                         },
                                         onError = { err ->
-                                            android.util.Log.e("EPM_FACE_LOG", "Offline logout biometric verification failed: $err")
                                             errorMessage = "Offline verification failed: $err"
                                         }
                                     )
                                 } else {
-                                    android.util.Log.e("EPM_FACE_LOG", "Offline logout biometric fallback unavailable (null Activity)")
                                     errorMessage = "Server unreachable. Please check your connection."
                                 }
                             }

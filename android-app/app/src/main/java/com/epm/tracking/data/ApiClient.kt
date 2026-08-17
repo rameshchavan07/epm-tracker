@@ -8,8 +8,9 @@ import retrofit2.converter.gson.GsonConverterFactory
 object ApiClient {
     // Your local machine's IP on the network. Run `ipconfig` on Windows to find it.
     // Update this whenever your IP changes (e.g. after reconnecting to WiFi).
-    // For Android Emulator only, use: "http://10.0.2.2:3000/"
-    private const val BASE_URL = "http://172.17.47.133:3000/"
+    // For local physical device testing on Wi-Fi/Ethernet:
+    private const val BASE_URL = "http://172.17.46.136:3000/"
+    // For Android Studio Emulator only, use: "http://10.0.2.2:3000/"
 
     private var retrofit: Retrofit? = null
 

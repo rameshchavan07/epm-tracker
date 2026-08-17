@@ -26,20 +26,24 @@ class SessionManager(context: Context) {
         return sharedPreferences.getString(KEY_AUTH_TOKEN, null)
     }
 
-    fun saveUserId(userId: String) {
-        sharedPreferences.edit().putString(KEY_USER_ID, userId).apply()
+    fun saveEmployeeCode(employeeCode: String) {
+        sharedPreferences.edit().putString(KEY_EMPLOYEE_CODE, employeeCode).apply()
     }
 
-    fun getUserId(): String? {
-        return sharedPreferences.getString(KEY_USER_ID, null)
+    fun getEmployeeCode(): String? {
+        return sharedPreferences.getString(KEY_EMPLOYEE_CODE, null)
     }
 
-    fun saveShortId(shortId: String) {
-        sharedPreferences.edit().putString(KEY_SHORT_ID, shortId).apply()
+    // Backward compatibility helpers
+    fun saveUserId(userId: String) = saveEmployeeCode(userId)
+    fun getUserId(): String? = getEmployeeCode()
+
+    fun saveEmployeeName(name: String) {
+        sharedPreferences.edit().putString(KEY_EMPLOYEE_NAME, name).apply()
     }
 
-    fun getShortId(): String? {
-        return sharedPreferences.getString(KEY_SHORT_ID, null)
+    fun getEmployeeName(): String? {
+        return sharedPreferences.getString(KEY_EMPLOYEE_NAME, null)
     }
 
     fun saveTrackingInterval(intervalMs: Long) {
@@ -55,7 +59,7 @@ class SessionManager(context: Context) {
     }
 
     fun getFaceVerificationInterval(): Long {
-        return sharedPreferences.getLong(KEY_FACE_VERIFICATION_INTERVAL, 7200000L) // Default 2 hours
+        return sharedPreferences.getLong(KEY_FACE_VERIFICATION_INTERVAL, 7200000L)
     }
 
     fun saveFaceVerificationGracePeriod(gracePeriodMs: Long) {
@@ -63,7 +67,7 @@ class SessionManager(context: Context) {
     }
 
     fun getFaceVerificationGracePeriod(): Long {
-        return sharedPreferences.getLong(KEY_FACE_VERIFICATION_GRACE_PERIOD, 300000L) // Default 5 minutes
+        return sharedPreferences.getLong(KEY_FACE_VERIFICATION_GRACE_PERIOD, 300000L)
     }
 
     fun recordFaceVerificationSuccess() {
@@ -116,8 +120,8 @@ class SessionManager(context: Context) {
     fun clearSession() {
         sharedPreferences.edit()
             .remove(KEY_AUTH_TOKEN)
-            .remove(KEY_USER_ID)
-            .remove(KEY_SHORT_ID)
+            .remove(KEY_EMPLOYEE_CODE)
+            .remove(KEY_EMPLOYEE_NAME)
             .remove(KEY_LAST_FACE_VERIFICATION_TIME)
             .remove(KEY_PENDING_VERIFICATION_START_TIME)
             .apply()
@@ -125,8 +129,8 @@ class SessionManager(context: Context) {
 
     companion object {
         private const val KEY_AUTH_TOKEN = "auth_token"
-        private const val KEY_USER_ID = "user_id"
-        private const val KEY_SHORT_ID = "short_id"
+        private const val KEY_EMPLOYEE_CODE = "employee_code"
+        private const val KEY_EMPLOYEE_NAME = "employee_name"
         private const val KEY_TRACKING_INTERVAL = "tracking_interval_ms"
         private const val KEY_FACE_VERIFICATION_INTERVAL = "face_verification_interval_ms"
         private const val KEY_FACE_VERIFICATION_GRACE_PERIOD = "face_verification_grace_period_ms"

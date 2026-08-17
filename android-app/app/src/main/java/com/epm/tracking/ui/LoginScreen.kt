@@ -6,6 +6,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,9 +18,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import com.epm.tracking.auth.FaceAuthManager
+import com.epm.tracking.data.ApiClient
 import com.epm.tracking.data.SessionManager
+import com.epm.tracking.data.ValidateEmployeeRequest
 import com.epm.tracking.ui.components.FaceCaptureCamera
+import com.epm.tracking.location.getOneTimeLocation
 import kotlinx.coroutines.launch
 import android.provider.Settings
 import androidx.compose.ui.platform.LocalContext
@@ -37,8 +45,17 @@ fun LoginScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var showCamera by remember { mutableStateOf(false) }
     var isVisible by remember { mutableStateOf(false) }
-    var verificationConfidence by remember { mutableStateOf<Int?>(null) }
+
+    // Registration Flow States
+    var showRegistrationUI by remember { mutableStateOf(false) }
+    var showRegisterOption by remember { mutableStateOf(false) } // Appears ONLY after face scan returns Face Not Found
+    var inputEmployeeCode by remember { mutableStateOf("") }
+    var isValidatingCode by remember { mutableStateOf(false) }
+    var validatedEmployeeName by remember { mutableStateOf<String?>(null) }
+    var isCodeValidated by remember { mutableStateOf(false) }
+
     val isFaceEnrolled = remember { sessionManager.isFaceEnrolled() }
+    val savedEmployeeCode = remember { sessionManager.getEmployeeCode() }
 
     LaunchedEffect(Unit) {
         isVisible = true
@@ -54,12 +71,11 @@ fun LoginScreen(
         )
     )
 
-    // Deep space gradient background
     val gradientBackground = Brush.verticalGradient(
         colors = listOf(
-            Color(0xFF0F172A), // Deep Slate
-            Color(0xFF1E1B4B), // Indigo Dark
-            Color(0xFF020617)  // Almost Black
+            Color(0xFF0F172A),
+            Color(0xFF1E1B4B),
+            Color(0xFF020617)
         ),
         startY = gradientOffset,
         endY = gradientOffset + 1500f
@@ -77,7 +93,7 @@ fun LoginScreen(
         ) {
             Card(
                 modifier = Modifier
-                    .fillMaxWidth(0.9f)
+                    .fillMaxWidth(0.92f)
                     .padding(16.dp),
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(
@@ -88,159 +104,310 @@ fun LoginScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(28.dp),
+                        .verticalScroll(rememberScrollState())
+                        .padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Brand Logo Badge
-                    Surface(
-                        modifier = Modifier
-                            .size(72.dp)
-                            .padding(bottom = 16.dp),
-                        shape = CircleShape,
-                        color = Color(0xFF3B82F6).copy(alpha = 0.15f),
-                        border = CardDefaults.outlinedCardBorder().copy(
-                            brush = Brush.radialGradient(
-                                listOf(Color(0xFF60A5FA), Color(0xFF3B82F6))
+                    // Brand Logo Badge Header (rendered for Login mode, hidden for Registration mode to free vertical space)
+                    if (!showRegistrationUI) {
+                        Surface(
+                            modifier = Modifier
+                                .size(68.dp)
+                                .padding(bottom = 12.dp),
+                            shape = CircleShape,
+                            color = Color(0xFF3B82F6).copy(alpha = 0.15f),
+                            border = CardDefaults.outlinedCardBorder().copy(
+                                brush = Brush.radialGradient(
+                                    listOf(Color(0xFF60A5FA), Color(0xFF3B82F6))
+                                )
                             )
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.LocationOn,
+                                    contentDescription = "Logo",
+                                    tint = Color(0xFF60A5FA),
+                                    modifier = Modifier.size(34.dp)
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = "EPM Tracker",
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
                         )
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.LocationOn,
-                                contentDescription = "Logo",
-                                tint = Color(0xFF60A5FA),
-                                modifier = Modifier.size(36.dp)
+
+                        Text(
+                            text = if (isFaceEnrolled && !savedEmployeeCode.isNull_or_blank_check()) "Face ID Authentication (${savedEmployeeCode})" else "Employee Face Login",
+                            fontSize = 13.sp,
+                            color = Color(0xFF94A3B8),
+                            modifier = Modifier.padding(bottom = 20.dp)
+                        )
+                    } else {
+                        // Compact Registration Header
+                        Text(
+                            text = "New Employee Registration",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+                    }
+
+
+                    // 1. REGISTRATION MODE (Entered Employee Code Verification)
+                    if (showRegistrationUI) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            OutlinedTextField(
+                                value = inputEmployeeCode,
+                                onValueChange = {
+                                    inputEmployeeCode = it
+                                    isCodeValidated = false
+                                    validatedEmployeeName = null
+                                    error = null
+                                },
+                                label = { Text("Enter Your Employee Code", color = Color(0xFF94A3B8)) },
+                                placeholder = { Text("e.g. EMP001", color = Color(0xFF64748B)) },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = Color(0xFF3B82F6),
+                                    unfocusedBorderColor = Color(0xFF475569)
+                                )
                             )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            if (!isCodeValidated) {
+                                Button(
+                                    onClick = {
+                                        if (inputEmployeeCode.isBlank()) {
+                                            error = "Please enter an employee code"
+                                            return@Button
+                                        }
+                                        isValidatingCode = true
+                                        error = null
+
+                                        coroutineScope.launch {
+                                            try {
+                                                val response = ApiClient.getService().validateEmployee(
+                                                    ValidateEmployeeRequest(employeeCode = inputEmployeeCode.trim())
+                                                )
+                                                isValidatingCode = false
+                                                if (response.valid) {
+                                                    isCodeValidated = true
+                                                    validatedEmployeeName = response.name ?: "Employee ${inputEmployeeCode.trim()}"
+                                                    error = null
+                                                } else {
+                                                    isCodeValidated = false
+                                                    error = response.message ?: "Employee code does not exist"
+                                                }
+                                            } catch (e: Exception) {
+                                                isValidatingCode = false
+                                                error = "Employee code validation failed: ${e.message}"
+                                            }
+                                        }
+                                    },
+                                    enabled = !isValidatingCode && inputEmployeeCode.isNotBlank(),
+                                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6))
+                                ) {
+                                    if (isValidatingCode) {
+                                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp))
+                                    } else {
+                                        Text("Validate Employee Code", fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            } else {
+                                // Validated employee card display
+                                Card(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF065F46).copy(alpha = 0.3f)),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.CheckCircle, contentDescription = "Valid", tint = Color(0xFF34D399), modifier = Modifier.size(24.dp))
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Column {
+                                            Text(text = "Employee Code: ${inputEmployeeCode.trim().uppercase()}", fontSize = 12.sp, color = Color(0xFF94A3B8))
+                                            Text(text = "Name: ${validatedEmployeeName ?: ""}", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                if (!showCamera) {
+                                    Button(
+                                        onClick = { showCamera = true },
+                                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                                    ) {
+                                        Text("📷 Scan Face", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                    }
+                                }
+                            }
                         }
                     }
 
-                    Text(
-                        text = "EPM Tracker",
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-
-                    Text(
-                        text = if (isFaceEnrolled) "Server-Verified Face ID Authentication" else "First-Time Face Registration",
-                        fontSize = 13.sp,
-                        color = Color(0xFF94A3B8),
-                        modifier = Modifier.padding(bottom = 24.dp)
-                    )
-
+                    // 2. CAMERA CAPTURE VIEW
                     if (showCamera) {
-                        // Camera capture mode
+                        val activeEmpCode = if (showRegistrationUI) inputEmployeeCode.trim() else (savedEmployeeCode ?: "")
+
                         FaceCaptureCamera(
                             isCapturing = isProcessing,
-                            captureButtonText = if (isFaceEnrolled) "👤 Capture Face to Log In" else "👤 Capture Face to Register",
+                            captureButtonText = if (showRegistrationUI) "👤 Capture Face to Register Profile" else "👤 Capture Face to Log In",
                             onImageCaptured = { base64Image ->
                                 isProcessing = true
                                 error = null
 
                                 coroutineScope.launch {
-                                    val deviceId = Settings.Secure.getString(
-                                        context.contentResolver,
-                                        Settings.Secure.ANDROID_ID
-                                    ) ?: java.util.UUID.randomUUID().toString()
-                                    val userId = sessionManager.getUserId()
-                                        ?: "USR-${deviceId.takeLast(6).uppercase()}"
+                                    val locationPair = context.getOneTimeLocation()
+                                    val lat = locationPair?.first
+                                    val lon = locationPair?.second
 
-                                    // Check if face is enrolled
-                                    if (!sessionManager.isFaceEnrolled()) {
-                                        // First-time user: do enrollment instead
-                                        android.util.Log.d("EPM_FACE_LOG", "User needs face registration. Starting enrollment on server for User ID: $userId")
-                                        val enrolled = faceAuthManager.enrollFaceWithServer(userId, base64Image)
-                                        if (enrolled) {
-                                            android.util.Log.i("EPM_FACE_LOG", "Face successfully registered/enrolled on server for User ID: $userId")
-                                            sessionManager.saveUserId(userId)
+                                    if (showRegistrationUI) {
+                                        // Registration / Enrollment for validated employee code
+                                        android.util.Log.d("EPM_FACE_LOG", "Registering face profile on server for Employee Code: $activeEmpCode")
+                                        val enrollResult = faceAuthManager.enrollFaceWithServer(
+                                            employeeCode = activeEmpCode,
+                                            base64Image = base64Image,
+                                            latitude = lat,
+                                            longitude = lon
+                                        )
+
+                                        if (enrollResult.first) {
+                                            sessionManager.saveEmployeeCode(activeEmpCode)
+                                            validatedEmployeeName?.let { sessionManager.saveEmployeeName(it) }
                                             sessionManager.saveFaceEnrolled(true)
                                             sessionManager.saveAuthToken("face_auth_token")
                                             sessionManager.recordFaceVerificationSuccess()
                                             isProcessing = false
                                             onLoginSuccess()
                                         } else {
-                                            android.util.Log.e("EPM_FACE_LOG", "Face enrollment failed on server for User ID: $userId")
                                             isProcessing = false
-                                            error = "Face enrollment failed. Please try again."
+                                            error = if (!enrollResult.second.isNullOrBlank()) {
+                                                enrollResult.second
+                                            } else {
+                                                "Face enrollment failed. Please ensure your face is clearly visible and try again."
+                                            }
                                         }
-                                        return@launch
-                                    }
-
-                                    android.util.Log.d("EPM_FACE_LOG", "Face is already enrolled. Requesting face verification from server for User ID: $userId")
-                                    // Verify face against server-stored profile
-                                    val result = faceAuthManager.verifyFaceWithServer(userId, base64Image)
-
-                                    if (result != null && result.match) {
-                                        android.util.Log.i("EPM_FACE_LOG", "Face verification succeeded! Match confidence: ${result.confidence}% (distance=${result.distance})")
-                                        verificationConfidence = result.confidence
-                                        sessionManager.saveUserId(userId)
-                                        sessionManager.saveAuthToken("face_auth_token")
-                                        sessionManager.recordFaceVerificationSuccess()
-                                        isProcessing = false
-                                        onLoginSuccess()
-                                    } else if (result != null) {
-                                        android.util.Log.w("EPM_FACE_LOG", "Face verification failed! Confidence: ${result.confidence}% (distance=${result.distance}) - Server message: ${result.message}")
-                                        isProcessing = false
-                                        error = "Face does not match. Confidence: ${result.confidence}%. Please try again."
                                     } else {
-                                        android.util.Log.e("EPM_FACE_LOG", "Server verification unreachable. Attempting offline local biometric fallback...")
-                                        // Network error — fallback to local biometric
-                                        isProcessing = false
-                                        val activity = context as? androidx.fragment.app.FragmentActivity
-                                        if (activity != null) {
-                                            faceAuthManager.authenticate(
-                                                activity = activity,
-                                                title = "Offline Face Login",
-                                                subtitle = "Server unreachable. Using local biometric verification.",
-                                                onSuccess = {
-                                                    android.util.Log.i("EPM_FACE_LOG", "Offline local biometric verification succeeded!")
-                                                    sessionManager.saveUserId(userId)
-                                                    sessionManager.saveAuthToken("face_auth_token")
-                                                    sessionManager.recordFaceVerificationSuccess()
-                                                    onLoginSuccess()
-                                                },
-                                                onError = { err ->
-                                                    android.util.Log.e("EPM_FACE_LOG", "Offline local biometric verification failed: $err")
-                                                    error = "Offline verification failed: $err"
-                                                }
-                                            )
+                                        // Existing User Verification
+                                        android.util.Log.d("EPM_FACE_LOG", "Verifying face profile on server for Employee Code: $activeEmpCode")
+                                        val result = faceAuthManager.verifyFaceWithServer(
+                                            employeeCode = activeEmpCode,
+                                            base64Image = base64Image,
+                                            latitude = lat,
+                                            longitude = lon
+                                        )
+
+
+                                        if (result != null && result.match) {
+                                            sessionManager.saveEmployeeCode(result.employeeCode ?: activeEmpCode)
+                                            sessionManager.saveFaceEnrolled(true)
+                                            sessionManager.saveAuthToken("face_auth_token")
+                                            sessionManager.recordFaceVerificationSuccess()
+                                            isProcessing = false
+                                            onLoginSuccess()
+                                        } else if (result != null) {
+                                            isProcessing = false
+                                            sessionManager.clearSession()
+                                            showRegisterOption = true // Show "Register Yourself" option ONLY after Face Not Found
+                                            error = "Face Not Found / Match Failed (${result.confidence}%). " + (result.message ?: "")
                                         } else {
-                                            android.util.Log.e("EPM_FACE_LOG", "Offline local biometric fallback unavailable (null Activity)")
-                                            error = "Server unreachable and biometric fallback unavailable."
+                                            // Offline biometric fallback
+                                            isProcessing = false
+                                            showRegisterOption = true // Show "Register Yourself" option if server unreachable or face not registered
+                                            val activity = context as? androidx.fragment.app.FragmentActivity
+                                            if (activity != null) {
+                                                faceAuthManager.authenticate(
+                                                    activity = activity,
+                                                    title = "Offline Face Login",
+                                                    subtitle = "Server unreachable. Using local biometric verification.",
+                                                    onSuccess = {
+                                                        sessionManager.saveEmployeeCode(activeEmpCode)
+                                                        sessionManager.saveAuthToken("face_auth_token")
+                                                        sessionManager.recordFaceVerificationSuccess()
+                                                        onLoginSuccess()
+                                                    },
+                                                    onError = { err ->
+                                                        error = "Offline verification failed: $err"
+                                                    }
+                                                )
+                                            } else {
+                                                error = "Server unreachable and biometric fallback unavailable."
+                                            }
                                         }
                                     }
                                 }
                             },
                             modifier = Modifier.fillMaxWidth()
                         )
-                    } else {
-                        // Initial state: show "Open Camera" button
+                    } else if (!showRegistrationUI) {
+                        // INITIAL SCREEN STATE (Normal face scan button only)
                         Button(
                             onClick = { showCamera = true },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(52.dp),
                             shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF2563EB)
-                            )
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
                         ) {
                             Text(
-                                text = if (isFaceEnrolled) "👤 Open Camera to Log In" else "👤 Open Camera to Register Face",
+                                text = "👤 Open Camera to Log In",
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
+                                fontSize = 15.sp
                             )
                         }
                     }
 
+                    // "Register Yourself" button appears ONLY after normal face scan returns "Face Not Found"
+                    if (showRegisterOption && !showRegistrationUI) {
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        OutlinedButton(
+                            onClick = {
+                                showRegistrationUI = true
+                                showCamera = false
+                                error = null
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            border = ButtonDefaults.outlinedButtonBorder.copy(brush = Brush.horizontalGradient(listOf(Color(0xFF60A5FA), Color(0xFF3B82F6))))
+                        ) {
+                            Icon(Icons.Default.Person, contentDescription = "Register", tint = Color(0xFF60A5FA), modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = "Register Yourself (New Employee)", color = Color(0xFF60A5FA), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        }
+                    }
+
                     if (error != null) {
-                        Text(
-                            text = error!!,
-                            color = Color(0xFFF87171),
-                            fontSize = 13.sp,
-                            modifier = Modifier.padding(top = 16.dp)
-                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Warning, contentDescription = "Error", tint = Color(0xFFF87171), modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = error!!,
+                                color = Color(0xFFF87171),
+                                fontSize = 13.sp
+                            )
+                        }
                     }
                 }
             }
@@ -248,3 +415,4 @@ fun LoginScreen(
     }
 }
 
+private fun String?.isNull_or_blank_check(): Boolean = this.isNullOrBlank()

@@ -2,6 +2,7 @@ package com.epm.tracking.auth
 
 import android.content.Context
 import android.provider.Settings
+import android.util.Log
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
@@ -18,16 +19,11 @@ class FaceAuthManager(private val context: Context) {
 
     fun canAuthenticateBiometrics(): Boolean {
         val biometricManager = BiometricManager.from(context)
-        // Removed DEVICE_CREDENTIAL — no PIN/pattern fallback allowed
         val authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG or
                              BiometricManager.Authenticators.BIOMETRIC_WEAK
         return biometricManager.canAuthenticate(authenticators) == BiometricManager.BIOMETRIC_SUCCESS
     }
 
-    /**
-     * Local biometric authentication (fallback only).
-     * Used when server is unreachable or models aren't loaded.
-     */
     fun authenticate(
         activity: FragmentActivity,
         title: String = "Face Identity Verification",
@@ -36,7 +32,6 @@ class FaceAuthManager(private val context: Context) {
         onError: (String) -> Unit
     ) {
         if (!canAuthenticateBiometrics()) {
-            // Fallback for emulator or devices without active biometrics configured
             onSuccess()
             return
         }
@@ -76,46 +71,50 @@ class FaceAuthManager(private val context: Context) {
     }
 
     /**
-     * Enroll face on the server with a real face image.
-     * Sends Base64-encoded JPEG to POST /api/v1/auth/enroll-face
-     * where face-api.js extracts and stores the 128-dim descriptor.
+     * Enroll face on the server using employeeCode.
+     * Returns Pair(success, message).
      */
     suspend fun enrollFaceWithServer(
-        userId: String,
-        base64Image: String
-    ): Boolean {
+        employeeCode: String,
+        base64Image: String,
+        registeredBy: String? = null,
+        latitude: Double? = null,
+        longitude: Double? = null
+    ): Pair<Boolean, String?> {
         val deviceId = Settings.Secure.getString(
             context.contentResolver,
             Settings.Secure.ANDROID_ID
         ) ?: "unknown"
 
         return try {
-            android.util.Log.d("EPM_FACE_LOG", "Sending enroll-face request to server for userId=$userId, deviceId=$deviceId")
+            android.util.Log.d("EPM_FACE_LOG", "Sending enroll-face request to server for employeeCode=$employeeCode, deviceId=$deviceId")
             val response = ApiClient.getService().enrollFace(
                 FaceEnrollRequest(
-                    userId = userId,
+                    employeeCode = employeeCode,
                     deviceId = deviceId,
-                    faceImage = base64Image
+                    faceImage = base64Image,
+                    registeredBy = registeredBy ?: employeeCode,
+                    latitude = latitude,
+                    longitude = longitude
                 )
             )
-            android.util.Log.i("EPM_FACE_LOG", "Enroll-face server response: success=${response.success}")
-            response.success
+            android.util.Log.i("EPM_FACE_LOG", "Enroll-face server response: success=${response.success}, message=${response.message}")
+            Pair(response.success, response.message)
         } catch (e: Exception) {
             android.util.Log.e("EPM_FACE_LOG", "Enroll-face FAILED with exception: ${e.javaClass.simpleName}: ${e.message}")
-            false
+            Pair(false, e.message)
         }
     }
 
     /**
-     * Verify face against server-stored profile.
-     * Sends Base64-encoded JPEG to POST /api/v1/auth/verify-face
-     * where face-api.js compares the face descriptor against the stored one.
-     *
-     * @return FaceVerifyResponse with match result and confidence, or null on network error.
+     * Verify face against server-stored profile using employeeCode.
      */
     suspend fun verifyFaceWithServer(
-        userId: String,
-        base64Image: String
+        employeeCode: String,
+        base64Image: String,
+        isLogout: Boolean = false,
+        latitude: Double? = null,
+        longitude: Double? = null
     ): FaceVerifyResponse? {
         val deviceId = Settings.Secure.getString(
             context.contentResolver,
@@ -123,20 +122,25 @@ class FaceAuthManager(private val context: Context) {
         ) ?: "unknown"
 
         return try {
-            android.util.Log.d("EPM_FACE_LOG", "Sending verify-face request to server for userId=$userId, deviceId=$deviceId")
+            android.util.Log.d("EPM_FACE_LOG", "Sending verify-face request to server for employeeCode=$employeeCode, deviceId=$deviceId, isLogout=$isLogout")
             val response = ApiClient.getService().verifyFace(
                 FaceVerifyRequest(
-                    userId = userId,
+                    employeeCode = employeeCode,
                     deviceId = deviceId,
-                    faceImage = base64Image
+                    faceImage = base64Image,
+                    isLogout = isLogout,
+                    event = if (isLogout) "LOGOUT" else "LOGIN",
+                    latitude = latitude,
+                    longitude = longitude
                 )
             )
+            Log.e("FaceAuthManager", "Verify-face server response: ${response}")
             android.util.Log.i("EPM_FACE_LOG", "Verify-face server response: match=${response.match}, confidence=${response.confidence}%, distance=${response.distance}")
             response
         } catch (e: Exception) {
+            Log.e("FaceAuthManager", "Verify-face exception: ${e.message}")
             android.util.Log.e("EPM_FACE_LOG", "Verify-face FAILED with exception: ${e.javaClass.simpleName}: ${e.message}")
             null
         }
     }
 }
-

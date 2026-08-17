@@ -10,6 +10,9 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeoutOrNull
+
 interface LocationClient {
     fun getLocationUpdates(interval: Long): Flow<Location>
     class LocationException(message: String): Exception(message)
@@ -88,3 +91,32 @@ fun Context.hasLocationPermission(): Boolean {
         android.Manifest.permission.ACCESS_COARSE_LOCATION
     ) == android.content.pm.PackageManager.PERMISSION_GRANTED
 }
+
+@SuppressLint("MissingPermission")
+suspend fun Context.getOneTimeLocation(): Pair<Double, Double>? {
+    return try {
+        if (!hasLocationPermission()) return null
+        val fusedClient = LocationServices.getFusedLocationProviderClient(this)
+        withTimeoutOrNull(3000L) {
+            val lastLoc: Location? = try { fusedClient.lastLocation.await() } catch (_: Exception) { null }
+            if (lastLoc != null && (System.currentTimeMillis() - lastLoc.time) < 120_000L) {
+                return@withTimeoutOrNull Pair(lastLoc.latitude, lastLoc.longitude)
+            }
+            val currentLoc: Location? = try {
+                fusedClient.getCurrentLocation(
+                    Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                    null
+                ).await()
+            } catch (_: Exception) { null }
+
+            if (currentLoc != null) {
+                Pair(currentLoc.latitude, currentLoc.longitude)
+            } else if (lastLoc != null) {
+                Pair(lastLoc.latitude, lastLoc.longitude)
+            } else null
+        }
+    } catch (_: Exception) {
+        null
+    }
+}
+

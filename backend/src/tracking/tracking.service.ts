@@ -6,28 +6,25 @@ import { TrackingGateway } from './tracking.gateway';
 import { LocationLog } from '@prisma/client';
 
 export interface LocationHistoryItem {
-  id: string;
-  deviceId: string;
+  id: string; // Composite key string (employee_code + recorded_date_time)
+  employee_code: string;
   lat: number;
   lng: number;
-  accuracy: number | null;
-  address?: string | null;
-  intervalMinutes?: number | null;
-  recordedAt: Date;
+  accuracy: number;
+  address: string;
+  recorded_date_time: Date;
 }
 
 export interface LatestLocationItem {
   id: string;
-  deviceId: string;
-  userId: string;
+  employee_code: string;
   name: string;
   status: string;
   lat: number | null;
   lng: number | null;
-  address?: string | null;
-  intervalMinutes?: number | null;
+  address: string;
   battery: number;
-  recordedAt: Date | null;
+  recorded_date_time: Date | null;
 }
 
 export interface AnalyticsResult {
@@ -49,26 +46,29 @@ export class TrackingService {
   ) {}
 
   async getTrackingConfig() {
-    let config = await this.prisma.systemConfig.findUnique({
-      where: { id: 'default' },
-    });
-    if (!config) {
-      config = await this.prisma.systemConfig.create({
+    let setup = await this.prisma.system_setup_table.findFirst();
+    if (!setup) {
+      setup = await this.prisma.system_setup_table.create({
         data: {
-          id: 'default',
-          trackingIntervalMinutes: 2,
-          faceVerificationIntervalMinutes: 120,
-          faceVerificationGracePeriodMinutes: 5,
+          unique_id_no: 'EMPID|EMP||1',
+          status: 'A',
+          tracking_interval_minutes: 2,
+          face_verification_interval_minutes: 120,
+          face_verification_grace_period_minutes: 5,
         },
       });
     }
+    const trackingMins = setup.tracking_interval_minutes ?? 2;
+    const faceMins = setup.face_verification_interval_minutes ?? 120;
+    const graceMins = setup.face_verification_grace_period_minutes ?? 5;
+
     return {
-      trackingIntervalMinutes: config.trackingIntervalMinutes,
-      trackingIntervalMs: config.trackingIntervalMinutes * 60 * 1000,
-      faceVerificationIntervalMinutes: config.faceVerificationIntervalMinutes,
-      faceVerificationIntervalMs: config.faceVerificationIntervalMinutes * 60 * 1000,
-      faceVerificationGracePeriodMinutes: config.faceVerificationGracePeriodMinutes,
-      faceVerificationGracePeriodMs: config.faceVerificationGracePeriodMinutes * 60 * 1000,
+      trackingIntervalMinutes: trackingMins,
+      trackingIntervalMs: trackingMins * 60 * 1000,
+      faceVerificationIntervalMinutes: faceMins,
+      faceVerificationIntervalMs: faceMins * 60 * 1000,
+      faceVerificationGracePeriodMinutes: graceMins,
+      faceVerificationGracePeriodMs: graceMins * 60 * 1000,
     };
   }
 
@@ -77,41 +77,36 @@ export class TrackingService {
     const faceInterval = faceIntervalMinutes && faceIntervalMinutes > 0 ? faceIntervalMinutes : 120;
     const gracePeriod = gracePeriodMinutes && gracePeriodMinutes > 0 ? gracePeriodMinutes : 5;
 
-    await this.prisma.systemConfig.upsert({
-      where: { id: 'default' },
-      update: {
-        trackingIntervalMinutes: validMinutes,
-        faceVerificationIntervalMinutes: faceInterval,
-        faceVerificationGracePeriodMinutes: gracePeriod,
-      },
-      create: {
-        id: 'default',
-        trackingIntervalMinutes: validMinutes,
-        faceVerificationIntervalMinutes: faceInterval,
-        faceVerificationGracePeriodMinutes: gracePeriod,
-      },
-    });
+    const setup = await this.prisma.system_setup_table.findFirst();
+    if (setup) {
+      await this.prisma.system_setup_table.update({
+        where: { unique_id_no: setup.unique_id_no },
+        data: {
+          tracking_interval_minutes: validMinutes,
+          face_verification_interval_minutes: faceInterval,
+          face_verification_grace_period_minutes: gracePeriod,
+          last_changed_time: new Date(),
+        },
+      });
+    } else {
+      await this.prisma.system_setup_table.create({
+        data: {
+          unique_id_no: 'EMPID|EMP||1',
+          status: 'A',
+          tracking_interval_minutes: validMinutes,
+          face_verification_interval_minutes: faceInterval,
+          face_verification_grace_period_minutes: gracePeriod,
+          created_datetime: new Date(),
+          last_changed_time: new Date(),
+        },
+      });
+    }
 
     this.logger.log(
-      `Updated database tracking config to: tracking=${validMinutes}m, face=${faceInterval}m, grace=${gracePeriod}m`,
+      `Updated HRMS system_setup_table config to: tracking=${validMinutes}m, face=${faceInterval}m, grace=${gracePeriod}m`,
     );
 
     return this.getTrackingConfig();
-  }
-
-  private async generateSequentialUserId(): Promise<string> {
-    const count = await this.prisma.mobileUser.count();
-    let nextNum = 1001 + count;
-    let candidate = `USR-${nextNum}`;
-
-    while (
-      await this.prisma.mobileUser.findUnique({ where: { userId: candidate } })
-    ) {
-      nextNum++;
-      candidate = `USR-${nextNum}`;
-    }
-
-    return candidate;
   }
 
   private async reverseGeocodeOSM(lat: number, lng: number): Promise<string | null> {
@@ -139,76 +134,91 @@ export class TrackingService {
 
     for (const loc of locations) {
       try {
-        const recordedAt = new Date(loc.timestamp);
-        let address = loc.address || null;
+        const recordedDateTime = loc.timestamp ? new Date(loc.timestamp) : new Date();
+        const empCode = loc.employeeCode || loc.employee_code || loc.mobileUserId || 'EMP001';
 
-        if (!address) {
-          address = await this.reverseGeocodeOSM(loc.latitude, loc.longitude);
+        let address = loc.address || '';
+        if (!address && loc.latitude && loc.longitude) {
+          const fetched = await this.reverseGeocodeOSM(loc.latitude, loc.longitude);
+          if (fetched) address = fetched;
         }
 
-        // 1. Find or create MobileUser with sequential User ID (USR-1001, USR-1002...)
-        let mobileUser = await this.prisma.mobileUser.findUnique({
-          where: { deviceId: loc.deviceId },
+        // Ensure employees_master record exists
+        let empMaster = await this.prisma.employees_master.findUnique({
+          where: { employee_code: empCode },
         });
 
-        if (mobileUser) {
-          mobileUser = await this.prisma.mobileUser.update({
-            where: { deviceId: loc.deviceId },
-            data: {
-              status: true,
-            },
-          });
-        } else {
-          const generatedUserId = await this.generateSequentialUserId();
-          mobileUser = await this.prisma.mobileUser.create({
-            data: {
-              deviceId: loc.deviceId,
-              userId: loc.mobileUserId || generatedUserId,
-              status: true,
-            },
-          });
+        if (!empMaster) {
+          try {
+            empMaster = await this.prisma.employees_master.create({
+              data: {
+                employee_code: empCode,
+                full_name: `Employee ${empCode}`,
+              },
+            });
+          } catch {
+            // Ignore if concurrency constraint
+          }
         }
 
-        // 2. Insert LocationLog
-        const intervalMinutes = loc.intervalMinutes ?? 2;
-        await this.prisma.locationLog.create({
+        // 1. Update FaceProfile login_status = 'Y' if profile exists
+        await this.prisma.faceProfile.updateMany({
+          where: { employee_code: empCode },
           data: {
-            deviceId: loc.deviceId,
+            login_status: 'Y',
+            last_login_date_time: recordedDateTime,
+            last_changed_date_time: new Date(),
+          },
+        });
+
+        // 2. Insert LocationLog record with primary key (employee_code, recorded_date_time)
+        await this.prisma.locationLog.upsert({
+          where: {
+            employee_code_recorded_date_time: {
+              employee_code: empCode,
+              recorded_date_time: recordedDateTime,
+            },
+          },
+          update: {
             latitude: loc.latitude,
             longitude: loc.longitude,
-            accuracy: loc.accuracy ?? null,
-            ...(address ? { address } : {}),
-            intervalMinutes,
-            recordedAt,
-          } as any,
+            accuracy: loc.accuracy ?? 0,
+            address: address || '',
+          },
+          create: {
+            employee_code: empCode,
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            recorded_date_time: recordedDateTime,
+            accuracy: loc.accuracy ?? 0,
+            address: address || '',
+          },
         });
 
         processedCount++;
 
-        // 3. Broadcast WebSocket update to web dashboard
+        // 3. Broadcast WebSocket update to web dashboard using recorded_date_time
+        const empName = empMaster?.full_name || `Employee ${empCode}`;
         this.trackingGateway.broadcastLocationUpdate({
-          id: mobileUser.deviceId,
-          deviceId: mobileUser.deviceId,
-          name: mobileUser.userId,
+          id: empCode,
+          deviceId: empCode,
+          employee_code: empCode,
+          name: empName,
           status: 'Active',
           lat: loc.latitude,
           lng: loc.longitude,
-          address,
-          intervalMinutes,
+          address: address || '',
           battery: 100,
-          recordedAt,
+          recorded_date_time: recordedDateTime,
         });
       } catch (error) {
-        this.logger.error(
-          `Error processing location for ${loc.deviceId}:`,
-          error,
-        );
+        this.logger.error(`Error processing location log:`, error);
       }
     }
 
-    return { 
-      success: processedCount > 0 || locations.length === 0, 
-      count: processedCount 
+    return {
+      success: processedCount > 0 || locations.length === 0,
+      count: processedCount,
     };
   }
 
@@ -228,135 +238,135 @@ export class TrackingService {
         }
       : undefined;
 
-    const mobileUser = await this.prisma.mobileUser.findFirst({
-      where: {
-        OR: [{ deviceId: identifier }, { userId: identifier }],
-      },
-    });
-
-    const targetDeviceId = mobileUser ? mobileUser.deviceId : identifier;
-
     const logs: LocationLog[] = await this.prisma.locationLog.findMany({
       where: {
-        deviceId: targetDeviceId,
-        ...(dateFilter ? { recordedAt: dateFilter } : {}),
+        employee_code: identifier,
+        ...(dateFilter ? { recorded_date_time: dateFilter } : {}),
       },
-      orderBy: { recordedAt: 'desc' },
+      orderBy: { recorded_date_time: 'desc' },
       take: limit,
     });
 
-    return logs.map((log: any) => ({
-      id: log.id,
-      deviceId: log.deviceId,
+    return logs.map((log) => ({
+      id: `${log.employee_code}_${log.recorded_date_time.getTime()}`,
+      employee_code: log.employee_code,
       lat: log.latitude,
       lng: log.longitude,
       accuracy: log.accuracy,
-      address: log.address ?? null,
-      intervalMinutes: log.intervalMinutes ?? 2,
-      recordedAt: log.recordedAt,
+      address: log.address,
+      recorded_date_time: log.recorded_date_time,
     }));
   }
 
   async getLatestLocations(): Promise<LatestLocationItem[]> {
-    const mobileUsers = await this.prisma.mobileUser.findMany({
-      include: {
-        locationLogs: {
-          orderBy: { recordedAt: 'desc' },
-          take: 1,
-        },
-      },
+    const profiles = await this.prisma.faceProfile.findMany({
+      where: { delete_flag: 'N' },
     });
 
-    return mobileUsers
-      .filter((user) => user.locationLogs.length > 0)
-      .map((user) => {
-        const latestLog: any = user.locationLogs[0];
-        return {
-          id: user.deviceId,
-          deviceId: user.deviceId,
-          userId: user.userId,
-          name: user.userId,
-          status: user.status ? 'Active' : 'Offline',
+    const employeesMaster = await this.prisma.employees_master.findMany();
+    const masterMap = new Map<string, string>();
+    for (const emp of employeesMaster) {
+      if (emp.full_name) {
+        masterMap.set(emp.employee_code, emp.full_name);
+      }
+    }
+
+    const latestLocations: LatestLocationItem[] = [];
+
+    for (const profile of profiles) {
+      const latestLog = await this.prisma.locationLog.findFirst({
+        where: { employee_code: profile.employee_code },
+        orderBy: { recorded_date_time: 'desc' },
+      });
+
+      if (latestLog) {
+        const empName = masterMap.get(profile.employee_code) || `Employee ${profile.employee_code}`;
+        latestLocations.push({
+          id: profile.employee_code,
+          employee_code: profile.employee_code,
+          name: empName,
+          status: profile.login_status === 'Y' ? 'Active' : 'Offline',
           lat: latestLog.latitude,
           lng: latestLog.longitude,
-          address: latestLog.address ?? null,
-          intervalMinutes: latestLog.intervalMinutes ?? 2,
+          address: latestLog.address,
           battery: 90,
-          recordedAt: latestLog.recordedAt,
-        };
-      });
+          recorded_date_time: latestLog.recorded_date_time,
+        });
+      }
+    }
+
+    return latestLocations;
   }
 
   async getAnalytics(): Promise<AnalyticsResult> {
-    const activeDevices = await this.prisma.mobileUser.count({
-      where: { status: true },
+    const activeCount = await this.prisma.faceProfile.count({
+      where: { login_status: 'Y', delete_flag: 'N' },
     });
-    const offlineDevices = await this.prisma.mobileUser.count({
-      where: { status: false },
+    const offlineCount = await this.prisma.faceProfile.count({
+      where: { login_status: 'N', delete_flag: 'N' },
     });
-    const totalDevices = await this.prisma.mobileUser.count();
+    const totalCount = await this.prisma.faceProfile.count({
+      where: { delete_flag: 'N' },
+    });
+
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
     const totalLogsToday = await this.prisma.locationLog.count({
       where: {
-        recordedAt: {
-          gte: new Date(new Date().setHours(0, 0, 0, 0)),
+        recorded_date_time: {
+          gte: startOfDay,
         },
       },
     });
 
     return {
-      activeUsers: activeDevices,
-      offlineUsers: offlineDevices,
-      totalUsers: totalDevices,
+      activeUsers: activeCount,
+      offlineUsers: offlineCount,
+      totalUsers: totalCount,
       totalLogsToday,
       avgBattery: 90,
     };
   }
 
-  // Runs every 1 minute — marks mobile devices offline if no location received within dynamic threshold
   @Cron('0 */1 * * * *')
   async markOfflineUsers(): Promise<void> {
     const config = await this.getTrackingConfig();
     const staleMinutes = Math.max(3, Math.ceil(config.trackingIntervalMinutes * 1.5));
     const staleCutoff = new Date(Date.now() - staleMinutes * 60 * 1000);
 
-    const staleDevices = await this.prisma.mobileUser.findMany({
-      where: {
-        status: true,
-      },
-      include: {
-        locationLogs: {
-          orderBy: { recordedAt: 'desc' },
-          take: 1,
-        },
-      },
+    const activeProfiles = await this.prisma.faceProfile.findMany({
+      where: { login_status: 'Y', delete_flag: 'N' },
     });
 
-    const devicesToMarkOffline = staleDevices.filter((device) => {
-      if (device.locationLogs.length === 0) return true;
-      return device.locationLogs[0].recordedAt < staleCutoff;
+    const staleCodes: string[] = [];
+
+    for (const profile of activeProfiles) {
+      const latestLog = await this.prisma.locationLog.findFirst({
+        where: { employee_code: profile.employee_code },
+        orderBy: { recorded_date_time: 'desc' },
+      });
+
+      if (!latestLog || latestLog.recorded_date_time < staleCutoff) {
+        staleCodes.push(profile.employee_code);
+      }
+    }
+
+    if (staleCodes.length === 0) return;
+
+    await this.prisma.faceProfile.updateMany({
+      where: { employee_code: { in: staleCodes } },
+      data: { login_status: 'N', last_changed_date_time: new Date() },
     });
 
-    if (devicesToMarkOffline.length === 0) return;
+    this.logger.log(`Marked ${staleCodes.length} employee(s) offline: ${staleCodes.join(', ')}`);
 
-    const staleDeviceIds = devicesToMarkOffline.map((d) => d.deviceId);
-    await this.prisma.mobileUser.updateMany({
-      where: { deviceId: { in: staleDeviceIds } },
-      data: { status: false },
-    });
-
-    const deviceNames = devicesToMarkOffline
-      .map((d) => d.userId || d.deviceId)
-      .join(', ');
-    this.logger.log(
-      `Marked ${devicesToMarkOffline.length} device(s) offline: ${deviceNames}`,
-    );
-
-    for (const device of devicesToMarkOffline) {
-      const displayName = device.userId || device.deviceId;
+    for (const code of staleCodes) {
       this.trackingGateway.broadcastLocationUpdate({
-        id: device.deviceId,
-        deviceId: device.deviceId,
-        name: displayName,
+        id: code,
+        deviceId: code,
+        employee_code: code,
+        name: `Employee ${code}`,
         status: 'Offline',
         lat: null,
         lng: null,
@@ -364,24 +374,19 @@ export class TrackingService {
     }
   }
 
-  async markOfflineExplicit(deviceId: string) {
-    if (!deviceId) return;
-    const device = await this.prisma.mobileUser.findUnique({
-      where: { deviceId },
-      select: { deviceId: true, userId: true },
-    });
+  async markOfflineExplicit(employeeCode: string) {
+    if (!employeeCode) return;
 
-    if (!device) return;
-
-    await this.prisma.mobileUser.update({
-      where: { deviceId: device.deviceId },
-      data: { status: false },
+    await this.prisma.faceProfile.updateMany({
+      where: { employee_code: employeeCode },
+      data: { login_status: 'N', last_changed_date_time: new Date() },
     });
 
     this.trackingGateway.broadcastLocationUpdate({
-      id: device.deviceId,
-      deviceId: device.deviceId,
-      name: device.userId || device.deviceId,
+      id: employeeCode,
+      deviceId: employeeCode,
+      employee_code: employeeCode,
+      name: `Employee ${employeeCode}`,
       status: 'Offline',
       lat: null,
       lng: null,

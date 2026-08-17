@@ -14,7 +14,8 @@ data class TrackingConfigResponse(
 )
 
 data class LoginRequest(
-    val userId: String,
+    val employeeCode: String? = null,
+    val userId: String? = null,
     val deviceId: String,
     val latitude: Double,
     val longitude: Double
@@ -35,35 +36,53 @@ data class LoginResponse(
 )
 
 data class LocationBatchRequest(
-    val deviceId: String,
-    val mobileUserId: String? = null,
+    val employeeCode: String,
     val latitude: Double,
     val longitude: Double,
     val accuracy: Float? = null,
     val speed: Float? = null,
     val batteryLevel: Int? = null,
     val address: String? = null,
-    val intervalMinutes: Int? = null,
     val timestamp: Long
 )
 
 data class SyncResponse(val success: Boolean, val count: Int)
 
-data class OfflineRequest(val deviceId: String)
+data class OfflineRequest(
+    val employeeCode: String? = null,
+    val deviceId: String? = null
+)
+
+data class ValidateEmployeeRequest(
+    val employeeCode: String
+)
+
+data class ValidateEmployeeResponse(
+    val valid: Boolean,
+    val employeeCode: String? = null,
+    val name: String? = null,
+    val message: String? = null
+)
 
 data class FaceEnrollRequest(
-    val userId: String,
+    val employeeCode: String,
     val deviceId: String,
     val faceImage: String? = null,
-    val faceData: String? = null
+    val registeredBy: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null
 )
 
 data class FaceEnrollResponse(val success: Boolean, val message: String)
 
 data class FaceVerifyRequest(
-    val userId: String,
+    val employeeCode: String,
     val deviceId: String,
-    val faceImage: String
+    val faceImage: String,
+    val isLogout: Boolean? = null,
+    val event: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null
 )
 
 data class FaceVerifyResponse(
@@ -71,14 +90,19 @@ data class FaceVerifyResponse(
     val confidence: Int,
     val distance: Double,
     val threshold: Double,
-    val message: String
+    val message: String,
+    val employeeCode: String? = null
 )
 
 interface ApiService {
     @GET("api/v1")
     suspend fun checkHealth(): retrofit2.Response<okhttp3.ResponseBody>
+
     @GET("api/v1/tracking/config")
     suspend fun getTrackingConfig(): TrackingConfigResponse
+
+    @POST("api/v1/auth/validate-employee")
+    suspend fun validateEmployee(@Body request: ValidateEmployeeRequest): ValidateEmployeeResponse
 
     @POST("api/v1/auth/login")
     suspend fun login(@Body request: LoginRequest): LoginResponse
@@ -88,9 +112,6 @@ interface ApiService {
 
     @POST("api/v1/auth/verify-face")
     suspend fun verifyFace(@Body request: FaceVerifyRequest): FaceVerifyResponse
-
-    @POST("api/v1/auth/device-register")
-    suspend fun registerDevice(): UserDto
 
     @POST("api/v1/tracking/location/batch")
     suspend fun syncLocations(@Body locations: List<LocationBatchRequest>): SyncResponse

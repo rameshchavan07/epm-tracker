@@ -7,13 +7,11 @@ import androidx.room.PrimaryKey
 data class LocationEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
-    val userId: String,
-    val deviceId: String,
+    val employeeCode: String,
     val latitude: Double,
     val longitude: Double,
     val accuracy: Float,
     val address: String? = null,
-    val intervalMinutes: Int? = null,
-    val timestamp: Long, // Epoch milliseconds
+    val timestamp: Long,
     val isSynced: Boolean = false
 )

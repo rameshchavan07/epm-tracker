@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Create an axios instance
 const apiClient = axios.create({
-  baseURL: `http://${window.location.hostname}:3000/api/v1`, // Dynamically use the host IP
+  baseURL: `http://103.205.127.18:3000/api/v1`, // Dynamically use the host IP
   headers: {
     'Content-Type': 'application/json',
   },

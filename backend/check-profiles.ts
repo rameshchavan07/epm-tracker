@@ -5,9 +5,10 @@ const prisma = new PrismaClient();
 async function main() {
   const profiles = await prisma.faceProfile.findMany({
     select: {
-      userId: true,
-      deviceId: true,
-      createdAt: true,
+      employee_code: true,
+      device_id: true,
+      registered_date_time: true,
+      login_status: true,
     }
   });
   console.log('--- REGISTERED FACE PROFILES ---');

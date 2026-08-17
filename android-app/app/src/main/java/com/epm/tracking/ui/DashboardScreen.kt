@@ -46,7 +46,7 @@ fun DashboardScreen(
     
     val db = remember { AppDatabase.getDatabase(context) }
     val sessionManager = remember { com.epm.tracking.data.SessionManager(context) }
-    val currentUserId = sessionManager.getUserId() ?: "Unknown User"
+    val currentEmployeeCode = sessionManager.getEmployeeCode() ?: "EMP001"
     val unsyncedCount by db.locationDao().getUnsyncedCount().collectAsState(initial = 0)
     @Suppress("SpellCheckingInspection")
     val snackbarHostState = remember { SnackbarHostState() }
@@ -166,13 +166,23 @@ fun DashboardScreen(
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
+                    val currentEmployeeName = sessionManager.getEmployeeName() ?: ""
                     Text(
-                        text = "User: $currentUserId",
+                        text = "Employee Code: $currentEmployeeCode",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
                         color = Color(0xFF60A5FA),
                         modifier = Modifier.padding(top = 2.dp, bottom = 2.dp)
                     )
+                    if (currentEmployeeName.isNotBlank()) {
+                        Text(
+                            text = "Employee Name: $currentEmployeeName",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White,
+                            modifier = Modifier.padding(bottom = 2.dp)
+                        )
+                    }
                     Text(
                         text = "Live GPS Service Control",
                         fontSize = 13.sp,
@@ -275,66 +285,70 @@ fun DashboardScreen(
                 }
             }
 
-            // Cloud Database Connection Indicator
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B).copy(alpha = 0.5f)),
-                border = CardDefaults.outlinedCardBorder().copy(brush = Brush.horizontalGradient(listOf(Color.White.copy(alpha=0.1f), Color.Transparent)))
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+            // Cloud Database Connection Indicator (UI Hidden - Underlying logic preserved)
+            if (false) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B).copy(alpha = 0.5f)),
+                    border = CardDefaults.outlinedCardBorder().copy(brush = Brush.horizontalGradient(listOf(Color.White.copy(alpha=0.1f), Color.Transparent)))
                 ) {
-                    Surface(
-                        modifier = Modifier.size(12.dp),
-                        shape = CircleShape,
-                        color = if (isConnected) Color(0xFF10B981) else Color(0xFFEF4444)
-                    ) {}
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text("Cloud Database", fontSize = 15.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
-                    Spacer(modifier = Modifier.weight(1f))
-                    Text(
-                        text = if (isConnected) "Connected" else "Disconnected",
-                        fontSize = 14.sp,
-                        color = if (isConnected) Color(0xFF34D399) else Color(0xFFF87171),
-                        fontWeight = FontWeight.Medium
-                    )
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            modifier = Modifier.size(12.dp),
+                            shape = CircleShape,
+                            color = if (isConnected) Color(0xFF10B981) else Color(0xFFEF4444)
+                        ) {}
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("Cloud Database", fontSize = 15.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+                        Spacer(modifier = Modifier.weight(1f))
+                        Text(
+                            text = if (isConnected) "Connected" else "Disconnected",
+                            fontSize = 14.sp,
+                            color = if (isConnected) Color(0xFF34D399) else Color(0xFFF87171),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
 
-            // Local DB Queue Indicator
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B).copy(alpha = 0.5f)),
-                border = CardDefaults.outlinedCardBorder().copy(brush = Brush.horizontalGradient(listOf(Color.White.copy(alpha=0.1f), Color.Transparent)))
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+            // Local DB Queue Indicator (UI Hidden - Underlying logic preserved)
+            if (false) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B).copy(alpha = 0.5f)),
+                    border = CardDefaults.outlinedCardBorder().copy(brush = Brush.horizontalGradient(listOf(Color.White.copy(alpha=0.1f), Color.Transparent)))
                 ) {
-                    Icon(Icons.Default.Refresh, contentDescription = null, tint = Color(0xFFA78BFA), modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text("Unsynced Coordinates", fontSize = 15.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
-                    Spacer(modifier = Modifier.weight(1f))
-                    
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (unsyncedCount > 0) Color(0xFFF59E0B) else Color(0xFF10B981).copy(alpha = 0.2f),
-                        modifier = Modifier.padding(end = 4.dp)
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "$unsyncedCount",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (unsyncedCount > 0) Color.White else Color(0xFF10B981),
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                        )
+                        Icon(Icons.Default.Refresh, contentDescription = null, tint = Color(0xFFA78BFA), modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("Unsynced Coordinates", fontSize = 15.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+                        Spacer(modifier = Modifier.weight(1f))
+                        
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (unsyncedCount > 0) Color(0xFFF59E0B) else Color(0xFF10B981).copy(alpha = 0.2f),
+                            modifier = Modifier.padding(end = 4.dp)
+                        ) {
+                            Text(
+                                text = "$unsyncedCount",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (unsyncedCount > 0) Color.White else Color(0xFF10B981),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
                     }
                 }
             }

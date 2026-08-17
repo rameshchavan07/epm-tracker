@@ -101,14 +101,15 @@ const ResizeMap: React.FC<{ isSidebarOpen: boolean }> = ({ isSidebarOpen }) => {
 
 interface LocationHistoryItem {
   id: string;
-  userId: string;
+  employee_code?: string;
+  userId?: string;
   lat: number;
   lng: number;
   accuracy?: number;
   speed?: number;
   address?: string;
   intervalMinutes?: number;
-  recordedAt: string;
+  recorded_date_time: string;
 }
 
 const LiveMap: React.FC = () => {
@@ -156,7 +157,7 @@ const LiveMap: React.FC = () => {
           
           let selected = response.data[0];
           if (targetUserId) {
-            const found = response.data.find((e: any) => e.id === targetUserId);
+            const found = response.data.find((e: any) => e.id === targetUserId || e.employee_code === targetUserId);
             if (found) selected = found;
           }
           setActiveEmployee(selected);
@@ -164,7 +165,7 @@ const LiveMap: React.FC = () => {
 
           if (targetUserId) {
             setShowHistory(true);
-            fetchRouteHistory(selected.deviceId || selected.id || selected.userId);
+            fetchRouteHistory(selected.employee_code || selected.deviceId || selected.id);
           }
         }
       } catch (error) {
@@ -179,7 +180,7 @@ const LiveMap: React.FC = () => {
     // Setup Socket.io Real-Time Live Streaming Listener
     let socket: any;
     import('socket.io-client').then(({ io }) => {
-      socket = io('http://localhost:3000');
+      socket = io('http://103.205.127.18:3000');
       socket.on('connect', () => {
         console.log('Connected to WebSocket Live Location Gateway');
       });
@@ -282,7 +283,7 @@ const LiveMap: React.FC = () => {
     setActiveEmployee(emp);
     setMapCenter([emp.lat, emp.lng]);
     if (showHistory) {
-      void fetchRouteHistory(emp.deviceId || emp.id || emp.userId);
+      void fetchRouteHistory(emp.employee_code || emp.deviceId || emp.id);
     }
     if (window.innerWidth < 768) {
       setIsSidebarOpen(false);
@@ -293,7 +294,7 @@ const LiveMap: React.FC = () => {
     const nextState = !showHistory;
     setShowHistory(nextState);
     if (nextState && activeEmployee) {
-      void fetchRouteHistory(activeEmployee.deviceId || activeEmployee.id || activeEmployee.userId, selectedDate);
+      void fetchRouteHistory(activeEmployee.employee_code || activeEmployee.deviceId || activeEmployee.id, selectedDate);
     } else {
       setIsPlaying(false);
     }
@@ -315,7 +316,7 @@ const LiveMap: React.FC = () => {
     const rows = historyLogs.map((log) => [
       `"${activeEmployee.userId || activeEmployee.name || 'N/A'}"`,
       `"${activeEmployee.deviceId || activeEmployee.id || 'N/A'}"`,
-      `"${new Date(log.recordedAt).toLocaleString()}"`,
+      `"${new Date(log.recorded_date_time).toLocaleString()}"`,
       `"${(log.address || 'N/A').toString().replace(/"/g, '""')}"`,
       log.lat,
       log.lng,
@@ -466,11 +467,11 @@ const LiveMap: React.FC = () => {
                     ⚡ {activeEmployee.intervalMinutes ?? 2} min interval
                   </span>
                 </div>
-                {activeEmployee.recordedAt && (
+                {activeEmployee.recorded_date_time && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
                     <span style={{ fontSize: '11px', color: '#94a3b8' }}>Last seen</span>
                     <span style={{ fontSize: '11px', color: '#34d399' }}>
-                      {new Date(activeEmployee.recordedAt).toLocaleTimeString()}
+                      {new Date(activeEmployee.recorded_date_time).toLocaleTimeString()}
                     </span>
                   </div>
                 )}
@@ -535,9 +536,10 @@ const LiveMap: React.FC = () => {
                       {(emp.lat as number).toFixed(4)}, {(emp.lng as number).toFixed(4)}
                     </p>
                   )}
-                  {emp.recordedAt && (
-                    <p style={{ fontSize: '10px', color: '#475569', marginTop: '1px' }}>
-                      {new Date(emp.recordedAt).toLocaleTimeString()}
+                  {emp.recorded_date_time && (
+                    <p className="text-secondary text-sm flex items-center gap-1 mt-1">
+                      <Clock size={14} />
+                      <span>{new Date(emp.recorded_date_time).toLocaleTimeString()}</span>
                     </p>
                   )}
                 </div>
@@ -675,10 +677,10 @@ const LiveMap: React.FC = () => {
                           <td style={{ color: '#64748b', paddingBottom: '3px', paddingRight: '8px' }}>Battery</td>
                           <td style={{ fontWeight: 600 }}>{emp.battery}%</td>
                         </tr>
-                        {emp.recordedAt && (
+                        {emp.recorded_date_time && (
                           <tr>
                             <td style={{ color: '#64748b', paddingRight: '8px' }}>Last Update</td>
-                            <td style={{ fontWeight: 600 }}>{new Date(emp.recordedAt).toLocaleTimeString()}</td>
+                            <td style={{ fontWeight: 600 }}>{new Date(emp.recorded_date_time).toLocaleTimeString()}</td>
                           </tr>
                         )}
                       </tbody>
@@ -807,7 +809,7 @@ const LiveMap: React.FC = () => {
                           <tr>
                             <td style={{ color: '#64748b', paddingBottom: '3px', paddingRight: '8px' }}>Time</td>
                             <td style={{ fontWeight: 600 }}>
-                              {new Date(log.recordedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                              {new Date(log.recorded_date_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                             </td>
                           </tr>
                           <tr>
@@ -1026,7 +1028,7 @@ const LiveMap: React.FC = () => {
                 </span>
                 <span>
                   {currentStepLog
-                    ? new Date(currentStepLog.recordedAt).toLocaleTimeString()
+                    ? new Date(currentStepLog.recorded_date_time).toLocaleTimeString()
                     : '--:--'}
                 </span>
               </div>

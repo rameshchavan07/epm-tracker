@@ -7,7 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-
 model WebUser {
   id           String   @id @default(uuid())
   name         String
@@ -19,51 +18,59 @@ model WebUser {
   updatedAt    DateTime @updatedAt
 }
 
-model MobileUser {
-  deviceId       String        @id
-  userId         String        @unique
-  status         Boolean       @default(true)
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+model employees_master {
+  employee_code String  @id @db.VarChar(20)
+  full_name     String? @default("") @db.VarChar(100)
 
-  locationLogs   LocationLog[]
+  @@map("employees_master")
 }
 
-model LocationLog {
-  id           String     @id @default(uuid())
-  deviceId     String
-  latitude     Float
-  longitude    Float
-  accuracy        Float?
-  address         String?
-  intervalMinutes Int?
-  recordedAt      DateTime   @default(now())
+model system_setup_table {
+  unique_id_no                       String    @id @db.VarChar(100)
+  status                             String?   @db.VarChar(20)
+  created_datetime                   DateTime?
+  last_changed_time                  DateTime?
+  tracking_interval_minutes          Int?      @default(2)
+  face_verification_interval_minutes  Int?      @default(120)
+  face_verification_grace_period_minutes Int?  @default(5)
 
-  mobileUser   MobileUser @relation(fields: [deviceId], references: [deviceId], onDelete: Cascade)
-
-  @@index([deviceId, recordedAt])
+  @@map("system_setup_table")
 }
 
 model FaceProfile {
-  id              String   @id @default(uuid())
-  userId          String
-  deviceId        String
-  descriptor      Float[]
-  referenceImage  String   @db.Text
-  lastLoginImage  String?  @db.Text
-  lastVerifiedAt  DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  employee_code              String   @db.VarChar(20)
+  device_id                  String   @db.VarChar(20)
+  registered_face_image      String   @default("") @db.Text
+  registered_face_descriptor Float[]
+  registered_by              String   @default("") @db.VarChar(20)
+  registered_date_time       DateTime @default(now())
+  last_login_image           String   @default("") @db.Text
+  last_login_date_time       DateTime @default(now())
+  login_status               String   @default("N") @db.Char(1)
+  delete_flag                String   @default("N") @db.Char(1)
+  last_changed_date_time     DateTime @default(now()) @updatedAt
 
-  @@unique([userId, deviceId])
-  @@index([userId])
+  @@id([employee_code, device_id])
 }
 
-model SystemConfig {
-  id                                 String   @id @default("default")
-  trackingIntervalMinutes            Int      @default(2)
-  faceVerificationIntervalMinutes    Int      @default(120)
-  faceVerificationGracePeriodMinutes Int      @default(5)
-  updatedAt                          DateTime @updatedAt
+model LocationLog {
+  employee_code      String   @db.VarChar(20)
+  latitude           Float
+  longitude          Float
+  recorded_date_time DateTime @default(now())
+  address            String   @default("") @db.VarChar(500)
+  accuracy           Float    @default(0)
+
+  @@id([employee_code, recorded_date_time])
 }
 
+model LoginLog {
+  employee_code String   @db.VarChar(20)
+  event         String   @db.VarChar(20)
+  latitude      Float?
+  longitude     Float?
+  date_time     DateTime @default(now())
+
+  @@id([employee_code, date_time])
+  @@map("LoginLog")
+}
