@@ -1,5 +1,6 @@
 package com.epm.tracking.auth
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Rect
@@ -113,6 +114,7 @@ class TFLiteFaceEmbeddingHelper(private val context: Context) {
         }
     }
 
+    @SuppressLint("UseKt")
     private fun fillPixelDensityFeatures(resizedFace: Bitmap, embedding: FloatArray) {
         var pixelIdx = 0
         for (y in 0 until 112 step 14) {
