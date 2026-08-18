@@ -14,7 +14,7 @@ android {
         minSdk = 24
         targetSdk = 34
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -23,6 +23,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            isMinifyEnabled = false
+            // Debug server URL — update this to your local machine's IP
+            buildConfigField("String", "BASE_URL", "\"http://10.84.18.181:3000/\"")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -30,6 +35,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Production server URL — update this to your production server
+            buildConfigField("String", "BASE_URL", "\"https://api.epmtracker.com/\"")
         }
     }
     compileOptions {
@@ -41,6 +48,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     packaging {
         resources {
@@ -63,6 +71,7 @@ dependencies {
     val locationVersion = "21.1.0"
     val coroutinesPlayVersion = "1.7.3"
     val retrofitVersion = "2.9.0"
+    val okhttpVersion = "4.12.0"
     val workVersion = "2.9.0"
     val securityCryptoVersion = "1.1.0-alpha06"
     val biometricVersion = "1.1.0"
@@ -100,6 +109,7 @@ dependencies {
     // Networking
     implementation("com.squareup.retrofit2:retrofit:$retrofitVersion")
     implementation("com.squareup.retrofit2:converter-gson:$retrofitVersion")
+    implementation("com.squareup.okhttp3:logging-interceptor:$okhttpVersion")
 
     // Background Work & Security
     implementation("androidx.work:work-runtime-ktx:$workVersion")

@@ -22,6 +22,10 @@ object BackgroundCameraHelper {
     private val cameraExecutor = Executors.newSingleThreadExecutor()
 
     suspend fun captureFaceInBackground(context: Context): String? {
+        if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            android.util.Log.e("BackgroundCameraHelper", "Camera permission is not granted")
+            return null
+        }
         return suspendCancellableCoroutine { continuation ->
             val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
             

@@ -32,7 +32,6 @@ export interface AnalyticsResult {
   offlineUsers: number;
   totalUsers: number;
   totalLogsToday: number;
-  avgBattery: number;
 }
 
 @Injectable()
@@ -103,7 +102,7 @@ export class TrackingService {
     }
 
     this.logger.log(
-      `Updated HRMS system_setup_table config to: tracking=${validMinutes}m, face=${faceInterval}m, grace=${gracePeriod}m`,
+      `Updated system config: tracking=${validMinutes}m, face=${faceInterval}m, grace=${gracePeriod}m`,
     );
 
     return this.getTrackingConfig();
@@ -113,14 +112,17 @@ export class TrackingService {
     try {
       const response = await fetch(
         `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
-        { headers: { 'User-Agent': 'EPM-Tracker/1.0' } }
+        {
+          headers: { 'User-Agent': 'EPM-Tracker/1.0' },
+          signal: AbortSignal.timeout(5000),
+        },
       );
       if (response.ok) {
-        const data: any = await response.json();
+        const data = (await response.json()) as { display_name?: string };
         return data.display_name || null;
       }
-    } catch {
-      // Ignore network errors or rate limits for OSM fallback
+    } catch (error) {
+      this.logger.warn(`Reverse geocode failed for (${lat}, ${lng}): ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
     return null;
   }
@@ -130,9 +132,16 @@ export class TrackingService {
       return { success: true, count: 0 };
     }
 
+    // Limit batch size to prevent memory exhaustion
+    const MAX_BATCH_SIZE = 500;
+    const batch = locations.slice(0, MAX_BATCH_SIZE);
+    if (locations.length > MAX_BATCH_SIZE) {
+      this.logger.warn(`Batch size ${locations.length} exceeds limit ${MAX_BATCH_SIZE}, truncating`);
+    }
+
     let processedCount = 0;
 
-    for (const loc of locations) {
+    for (const loc of batch) {
       try {
         const recordedDateTime = loc.timestamp ? new Date(loc.timestamp) : new Date();
         const empCode = loc.employeeCode || loc.employee_code || loc.mobileUserId || 'EMP001';
@@ -258,12 +267,23 @@ export class TrackingService {
     }));
   }
 
+  /**
+   * Optimized: uses raw SQL to get latest location per employee in a single query,
+   * eliminating the N+1 query problem.
+   */
   async getLatestLocations(): Promise<LatestLocationItem[]> {
     const profiles = await this.prisma.faceProfile.findMany({
       where: { delete_flag: 'N' },
     });
 
-    const employeesMaster = await this.prisma.employees_master.findMany();
+    if (profiles.length === 0) return [];
+
+    const employeeCodes = profiles.map((p) => p.employee_code);
+
+    // Fetch employees_master in one query
+    const employeesMaster = await this.prisma.employees_master.findMany({
+      where: { employee_code: { in: employeeCodes } },
+    });
     const masterMap = new Map<string, string>();
     for (const emp of employeesMaster) {
       if (emp.full_name) {
@@ -271,14 +291,31 @@ export class TrackingService {
       }
     }
 
+    // Fetch latest location per employee using DISTINCT ON (single query, no N+1)
+    const latestLogs = await this.prisma.$queryRaw<
+      Array<{
+        employee_code: string;
+        latitude: number;
+        longitude: number;
+        address: string;
+        recorded_date_time: Date;
+      }>
+    >`
+      SELECT DISTINCT ON (employee_code)
+        employee_code, latitude, longitude, address, recorded_date_time
+      FROM "LocationLog"
+      WHERE employee_code = ANY(${employeeCodes})
+      ORDER BY employee_code, recorded_date_time DESC
+    `;
+
+    const logMap = new Map<string, (typeof latestLogs)[0]>();
+    for (const log of latestLogs) {
+      logMap.set(log.employee_code, log);
+    }
+
     const latestLocations: LatestLocationItem[] = [];
-
     for (const profile of profiles) {
-      const latestLog = await this.prisma.locationLog.findFirst({
-        where: { employee_code: profile.employee_code },
-        orderBy: { recorded_date_time: 'desc' },
-      });
-
+      const latestLog = logMap.get(profile.employee_code);
       if (latestLog) {
         const empName = masterMap.get(profile.employee_code) || `Employee ${profile.employee_code}`;
         latestLocations.push({
@@ -299,36 +336,42 @@ export class TrackingService {
   }
 
   async getAnalytics(): Promise<AnalyticsResult> {
-    const activeCount = await this.prisma.faceProfile.count({
-      where: { login_status: 'Y', delete_flag: 'N' },
-    });
-    const offlineCount = await this.prisma.faceProfile.count({
-      where: { login_status: 'N', delete_flag: 'N' },
-    });
-    const totalCount = await this.prisma.faceProfile.count({
-      where: { delete_flag: 'N' },
-    });
-
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const totalLogsToday = await this.prisma.locationLog.count({
-      where: {
-        recorded_date_time: {
-          gte: startOfDay,
-        },
-      },
-    });
+    const [activeCount, offlineCount, totalCount, totalLogsToday] =
+      await Promise.all([
+        this.prisma.faceProfile.count({
+          where: { login_status: 'Y', delete_flag: 'N' },
+        }),
+        this.prisma.faceProfile.count({
+          where: { login_status: 'N', delete_flag: 'N' },
+        }),
+        this.prisma.faceProfile.count({
+          where: { delete_flag: 'N' },
+        }),
+        this.prisma.locationLog.count({
+          where: {
+            recorded_date_time: {
+              gte: (() => {
+                const d = new Date();
+                d.setHours(0, 0, 0, 0);
+                return d;
+              })(),
+            },
+          },
+        }),
+      ]);
 
     return {
       activeUsers: activeCount,
       offlineUsers: offlineCount,
       totalUsers: totalCount,
       totalLogsToday,
-      avgBattery: 90,
     };
   }
 
+  /**
+   * Optimized: marks stale employees offline using a single raw query
+   * instead of N+1 queries per active profile.
+   */
   @Cron('0 */1 * * * *')
   async markOfflineUsers(): Promise<void> {
     const config = await this.getTrackingConfig();
@@ -337,18 +380,33 @@ export class TrackingService {
 
     const activeProfiles = await this.prisma.faceProfile.findMany({
       where: { login_status: 'Y', delete_flag: 'N' },
+      select: { employee_code: true },
     });
 
+    if (activeProfiles.length === 0) return;
+
+    const activeCodes = activeProfiles.map((p) => p.employee_code);
+
+    // Single query: find latest log per active employee
+    const latestLogs = await this.prisma.$queryRaw<
+      Array<{ employee_code: string; max_time: Date }>
+    >`
+      SELECT employee_code, MAX(recorded_date_time) as max_time
+      FROM "LocationLog"
+      WHERE employee_code = ANY(${activeCodes})
+      GROUP BY employee_code
+    `;
+
+    const latestMap = new Map<string, Date>();
+    for (const row of latestLogs) {
+      latestMap.set(row.employee_code, row.max_time);
+    }
+
     const staleCodes: string[] = [];
-
-    for (const profile of activeProfiles) {
-      const latestLog = await this.prisma.locationLog.findFirst({
-        where: { employee_code: profile.employee_code },
-        orderBy: { recorded_date_time: 'desc' },
-      });
-
-      if (!latestLog || latestLog.recorded_date_time < staleCutoff) {
-        staleCodes.push(profile.employee_code);
+    for (const code of activeCodes) {
+      const lastTime = latestMap.get(code);
+      if (!lastTime || lastTime < staleCutoff) {
+        staleCodes.push(code);
       }
     }
 
@@ -361,12 +419,20 @@ export class TrackingService {
 
     this.logger.log(`Marked ${staleCodes.length} employee(s) offline: ${staleCodes.join(', ')}`);
 
+    const masterMap = new Map<string, string>();
+    const masters = await this.prisma.employees_master.findMany({
+      where: { employee_code: { in: staleCodes } },
+    });
+    for (const m of masters) {
+      if (m.full_name) masterMap.set(m.employee_code, m.full_name);
+    }
+
     for (const code of staleCodes) {
       this.trackingGateway.broadcastLocationUpdate({
         id: code,
         deviceId: code,
         employee_code: code,
-        name: `Employee ${code}`,
+        name: masterMap.get(code) || `Employee ${code}`,
         status: 'Offline',
         lat: null,
         lng: null,
@@ -382,11 +448,15 @@ export class TrackingService {
       data: { login_status: 'N', last_changed_date_time: new Date() },
     });
 
+    const empMaster = await this.prisma.employees_master.findUnique({
+      where: { employee_code: employeeCode },
+    });
+
     this.trackingGateway.broadcastLocationUpdate({
       id: employeeCode,
       deviceId: employeeCode,
       employee_code: employeeCode,
-      name: `Employee ${employeeCode}`,
+      name: empMaster?.full_name || `Employee ${employeeCode}`,
       status: 'Offline',
       lat: null,
       lng: null,

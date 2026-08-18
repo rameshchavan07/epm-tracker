@@ -1,9 +1,13 @@
 import axios from 'axios';
 
-// Create an axios instance
+// Environment-aware API Base URL
 const backendHost = window.location.hostname || 'localhost';
+const defaultBaseUrl = `http://${backendHost}:3000/api/v1`;
+const baseURL = import.meta.env.VITE_API_URL || defaultBaseUrl;
+
 const apiClient = axios.create({
-  baseURL: `http://${backendHost}:3000/api/v1`,
+  baseURL,
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -23,14 +27,15 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Response interceptor for handling 401s (optional)
+// Response interceptor for handling 401s (unauthorized)
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      // Clear token and redirect to login if unauthorized
       localStorage.removeItem('token');
-      window.location.href = '/';
+      if (window.location.pathname !== '/') {
+        window.location.href = '/';
+      }
     }
     return Promise.reject(error);
   }

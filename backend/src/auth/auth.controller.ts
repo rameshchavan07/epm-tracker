@@ -6,11 +6,15 @@ import {
   UnauthorizedException,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import { AuthService, UserWithoutPassword } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { EnrollFaceDto } from './dto/enroll-face.dto';
+import { VerifyFaceDto } from './dto/verify-face.dto';
 import { EmployeesService } from '../employees/employees.service';
 import { FaceRecognitionService, FaceEnrollResult, FaceVerifyResult } from './face-recognition.service';
+import { JwtAuthGuard } from './jwt-auth.guard';
 
 @Controller('auth')
 export class AuthController {
@@ -36,6 +40,7 @@ export class AuthController {
   }
 
   @Post('register')
+  @UseGuards(JwtAuthGuard)
   async register(
     @Body()
     body: {
@@ -53,6 +58,7 @@ export class AuthController {
   }
 
   @Get('me')
+  @UseGuards(JwtAuthGuard)
   async me() {
     return { status: 'ok' };
   }
@@ -65,26 +71,7 @@ export class AuthController {
 
   @Post('enroll-face')
   @HttpCode(HttpStatus.OK)
-  async enrollFace(
-    @Body()
-    body: {
-      employeeCode: string;
-      deviceId: string;
-      faceImage: string;
-      registeredBy?: string;
-      latitude?: number;
-      longitude?: number;
-    },
-  ): Promise<FaceEnrollResult> {
-    if (!body.employeeCode || !body.deviceId || !body.faceImage) {
-      return {
-        success: false,
-        message: 'employeeCode, deviceId, and faceImage are required',
-        employeeCode: body.employeeCode || '',
-        enrolledAt: '',
-      };
-    }
-
+  async enrollFace(@Body() body: EnrollFaceDto): Promise<FaceEnrollResult> {
     return this.faceRecognitionService.enrollFace(
       body.employeeCode,
       body.deviceId,
@@ -96,19 +83,7 @@ export class AuthController {
 
   @Post('verify-face')
   @HttpCode(HttpStatus.OK)
-  async verifyFace(
-    @Body()
-    body: {
-      employeeCode?: string;
-      userId?: string;
-      deviceId: string;
-      faceImage: string;
-      isLogout?: boolean;
-      event?: string;
-      latitude?: number;
-      longitude?: number;
-    },
-  ): Promise<FaceVerifyResult> {
+  async verifyFace(@Body() body: VerifyFaceDto): Promise<FaceVerifyResult> {
     const employeeCode = body.employeeCode || body.userId || '';
     const deviceId = body.deviceId || 'unknown';
 

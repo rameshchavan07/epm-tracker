@@ -37,6 +37,7 @@ export class TrackingController {
   }
 
   @Get('latest')
+  @UseGuards(JwtAuthGuard)
   async getLatestLocations() {
     return this.trackingService.getLatestLocations();
   }
@@ -58,6 +59,7 @@ export class TrackingController {
   }
 
   @Post('config')
+  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async updateTrackingConfig(
     @Body()
@@ -75,6 +77,7 @@ export class TrackingController {
   }
 
   @Get('analytics')
+  @UseGuards(JwtAuthGuard)
   async getAnalytics() {
     return this.trackingService.getAnalytics();
   }

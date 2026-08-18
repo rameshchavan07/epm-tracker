@@ -1,4 +1,4 @@
-import { IsNumber, IsOptional, IsString, IsNotEmpty } from 'class-validator';
+import { IsNumber, IsOptional, IsString, Min, Max } from 'class-validator';
 
 export class CreateLocationLogDto {
   @IsString()
@@ -18,15 +18,18 @@ export class CreateLocationLogDto {
   deviceId?: string;
 
   @IsNumber()
-  @IsNotEmpty()
+  @Min(-90)
+  @Max(90)
   latitude: number;
 
   @IsNumber()
-  @IsNotEmpty()
+  @Min(-180)
+  @Max(180)
   longitude: number;
 
   @IsNumber()
   @IsOptional()
+  @Min(0)
   accuracy?: number;
 
   @IsString()
@@ -35,5 +38,5 @@ export class CreateLocationLogDto {
 
   @IsNumber()
   @IsOptional()
-  timestamp: number;
+  timestamp?: number;
 }

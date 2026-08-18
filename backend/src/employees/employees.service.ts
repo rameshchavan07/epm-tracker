@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface EmployeeValidationResult {
@@ -10,6 +10,8 @@ export interface EmployeeValidationResult {
 
 @Injectable()
 export class EmployeesService {
+  private readonly logger = new Logger(EmployeesService.name);
+
   constructor(private prisma: PrismaService) {}
 
   /**
@@ -21,26 +23,12 @@ export class EmployeesService {
     }
 
     const cleanCode = employeeCode.trim();
-    let employee = await this.prisma.employees_master.findUnique({
+    const employee = await this.prisma.employees_master.findUnique({
       where: { employee_code: cleanCode },
     });
 
-    // Fallback: If employees_master table is empty or missing candidate, create a fallback entry for testing/seamless operation
     if (!employee) {
-      try {
-        employee = await this.prisma.employees_master.create({
-          data: {
-            employee_code: cleanCode,
-            full_name: `Employee ${cleanCode}`,
-          },
-        });
-      } catch {
-        // If creation fails due to DB constraints
-      }
-    }
-
-    if (!employee) {
-      return { valid: false, message: 'Employee code does not exist' };
+      return { valid: false, message: 'Employee code does not exist in the HRMS system' };
     }
 
     return {
@@ -52,24 +40,44 @@ export class EmployeesService {
 
   /**
    * Find all employee profiles for Web Dashboard.
+   * Optimized: uses DISTINCT ON to get only the latest log per employee instead of loading all logs.
    */
-  async findAll(): Promise<any[]> {
+  async findAll(): Promise<unknown[]> {
     const profiles = await this.prisma.faceProfile.findMany({
       where: { delete_flag: 'N' },
       orderBy: { last_changed_date_time: 'desc' },
     });
 
-    const employeesMaster = await this.prisma.employees_master.findMany();
-    const latestLogs = await this.prisma.locationLog.findMany({
-      orderBy: { recorded_date_time: 'desc' },
+    if (profiles.length === 0) return [];
+
+    const employeeCodes = profiles.map((p) => p.employee_code);
+
+    // Fetch employees_master in one query
+    const employeesMaster = await this.prisma.employees_master.findMany({
+      where: { employee_code: { in: employeeCodes } },
     });
 
+    // Fetch only the latest log per employee (single query, not all logs)
+    const latestLogs = await this.prisma.$queryRaw<
+      Array<{
+        employee_code: string;
+        latitude: number;
+        longitude: number;
+        address: string;
+        recorded_date_time: Date;
+      }>
+    >`
+      SELECT DISTINCT ON (employee_code)
+        employee_code, latitude, longitude, address, recorded_date_time
+      FROM "LocationLog"
+      WHERE employee_code = ANY(${employeeCodes})
+      ORDER BY employee_code, recorded_date_time DESC
+    `;
+
     // Map logs by employee_code (most recent)
-    const logMap = new Map<string, any>();
+    const logMap = new Map<string, (typeof latestLogs)[0]>();
     for (const log of latestLogs) {
-      if (!logMap.has(log.employee_code)) {
-        logMap.set(log.employee_code, log);
-      }
+      logMap.set(log.employee_code, log);
     }
 
     // Map master full_name

@@ -99,30 +99,39 @@ export class FaceRecognitionService implements OnModuleInit {
    * Returns null if no face is detected.
    */
   private async extractDescriptorArcFace(base64Image: string): Promise<number[] | null> {
-    try {
-      const res = await fetch(`${this.arcfaceServiceUrl}/extract-embedding`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: base64Image }),
-        signal: AbortSignal.timeout(15000),
-      });
+    const maxRetries = 2;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const res = await fetch(`${this.arcfaceServiceUrl}/extract-embedding`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: base64Image }),
+          signal: AbortSignal.timeout(15000),
+        });
 
-      const data = (await res.json()) as {
-        detected: boolean;
-        embedding: number[];
-        message: string;
-      };
+        const data = (await res.json()) as {
+          detected: boolean;
+          embedding: number[];
+          message: string;
+        };
 
-      if (!data.detected || !data.embedding || data.embedding.length === 0) {
-        this.logger.warn(`ArcFace: no face detected — ${data.message}`);
+        if (!data.detected || !data.embedding || data.embedding.length === 0) {
+          this.logger.warn(`ArcFace: no face detected — ${data.message}`);
+          return null;
+        }
+
+        return data.embedding;
+      } catch (err) {
+        if (attempt < maxRetries) {
+          this.logger.warn(`ArcFace call failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying...`);
+          await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+          continue;
+        }
+        this.logger.error('ArcFace microservice call failed after retries', err);
         return null;
       }
-
-      return data.embedding;
-    } catch (err) {
-      this.logger.error('ArcFace microservice call failed', err);
-      return null;
     }
+    return null;
   }
 
   /**
@@ -197,6 +206,8 @@ export class FaceRecognitionService implements OnModuleInit {
   /**
    * Enroll a new face profile for an employee + device combination.
    * Also inserts a new 'LOGIN' event row into LoginLog.
+   *
+   * Global uniqueness check is paginated to avoid loading all profiles into memory.
    */
   async enrollFace(
     employeeCode: string,
@@ -254,22 +265,47 @@ export class FaceRecognitionService implements OnModuleInit {
     );
 
     // Check 3: Is Face already registered globally?
-    // Uses globalMatchThreshold (0.35) — stricter 1-to-N uniqueness, not 1-to-1 login threshold
-    const allActiveProfiles = await this.prisma.faceProfile.findMany({
-      where: { delete_flag: 'N' },
-    });
-    for (const p of allActiveProfiles) {
-      if (p.registered_face_descriptor && p.registered_face_descriptor.length > 0) {
-        const dist = this.compareDescriptors(descriptorArray, p.registered_face_descriptor);
-        if (dist < this.globalMatchThreshold) {
-          return {
-            success: false,
-            message: 'This face is already registered.',
-            employeeCode,
-            enrolledAt: '',
-          };
+    // Paginated approach to avoid loading all profiles into memory
+    const PAGE_SIZE = 100;
+    let skip = 0;
+    let hasDuplicate = false;
+    let duplicateEmpCode = '';
+
+    while (!hasDuplicate) {
+      const batch = await this.prisma.faceProfile.findMany({
+        where: { delete_flag: 'N' },
+        select: {
+          employee_code: true,
+          registered_face_descriptor: true,
+        },
+        skip,
+        take: PAGE_SIZE,
+      });
+
+      if (batch.length === 0) break;
+
+      for (const p of batch) {
+        if (p.registered_face_descriptor && p.registered_face_descriptor.length > 0) {
+          const dist = this.compareDescriptors(descriptorArray, p.registered_face_descriptor);
+          if (dist < this.globalMatchThreshold) {
+            hasDuplicate = true;
+            duplicateEmpCode = p.employee_code;
+            break;
+          }
         }
       }
+
+      skip += PAGE_SIZE;
+      if (batch.length < PAGE_SIZE) break;
+    }
+
+    if (hasDuplicate) {
+      return {
+        success: false,
+        message: `This face is already registered in the system under Employee Code ${duplicateEmpCode}. You are not allowed to register again using a new Employee ID.`,
+        employeeCode,
+        enrolledAt: '',
+      };
     }
 
     const now = new Date();
@@ -307,7 +343,7 @@ export class FaceRecognitionService implements OnModuleInit {
     }
 
     this.logger.log(
-      `Face enrolled successfully for employee ${employeeCode} on device ${deviceId} with registered_by=''`,
+      `Face enrolled successfully for employee ${employeeCode} on device ${deviceId}`,
     );
 
     return {

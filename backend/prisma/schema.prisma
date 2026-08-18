@@ -51,6 +51,9 @@ model FaceProfile {
   last_changed_date_time     DateTime @default(now()) @updatedAt
 
   @@id([employee_code, device_id])
+  @@index([employee_code, delete_flag])
+  @@index([device_id, delete_flag])
+  @@index([login_status, delete_flag])
 }
 
 model LocationLog {
@@ -62,6 +65,8 @@ model LocationLog {
   accuracy           Float    @default(0)
 
   @@id([employee_code, recorded_date_time])
+  @@index([recorded_date_time])
+  @@index([employee_code, recorded_date_time(sort: Desc)])
 }
 
 model LoginLog {
@@ -72,5 +77,6 @@ model LoginLog {
   date_time     DateTime @default(now())
 
   @@id([employee_code, date_time])
+  @@index([date_time])
   @@map("LoginLog")
 }

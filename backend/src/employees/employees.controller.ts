@@ -1,22 +1,17 @@
 import {
   Controller,
   Get,
-  Post,
   Delete,
-  Body,
   Param,
-  Query,
+  UseGuards,
 } from '@nestjs/common';
 import { EmployeesService } from './employees.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('employees')
+@UseGuards(JwtAuthGuard)
 export class EmployeesController {
   constructor(private readonly employeesService: EmployeesService) {}
-
-  @Post('validate')
-  async validate(@Body() body: { employeeCode: string }) {
-    return await this.employeesService.validateEmployeeCode(body.employeeCode);
-  }
 
   @Get()
   async findAll() {

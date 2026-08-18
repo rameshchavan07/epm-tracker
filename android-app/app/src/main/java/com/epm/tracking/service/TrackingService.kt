@@ -51,7 +51,7 @@ class TrackingService : Service() {
             ACTION_START -> start()
             ACTION_STOP  -> stop()
         }
-        return START_NOT_STICKY
+        return START_STICKY
     }
 
     private fun start() {

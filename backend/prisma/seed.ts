@@ -6,8 +6,8 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('Seeding database with HRMS Web Users and Employee Profiles...');
 
-  const salt = await bcrypt.genSalt(10);
-  const passwordHash = await bcrypt.hash('password123', salt);
+  const salt = await bcrypt.genSalt(12);
+  const passwordHash = await bcrypt.hash('Epm@Admin#2026!', salt);
 
   // 1. Create Web Admin User
   const admin = await prisma.webUser.upsert({

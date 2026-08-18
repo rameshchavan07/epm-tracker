@@ -8,45 +8,27 @@ import {
 } from 'lucide-react';
 import apiClient from '../api/client';
 
-interface CompanyProfile {
-  id: string;
-  name: string;
-  subscriptionPlan: string;
-  trackingInterval?: number;
-  status: boolean;
-  createdAt: string;
-}
-
 const CompanySettings: React.FC = () => {
-  const [, setCompany] = useState<CompanyProfile | null>(null);
-  const [name, setName] = useState('');
-  const [subscriptionPlan, setSubscriptionPlan] = useState('PRO');
   const [trackingInterval, setTrackingInterval] = useState<number>(2);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
-    const fetchCompanyProfile = async () => {
+    const fetchConfig = async () => {
       try {
-        const response = await apiClient.get('/company/profile');
-        if (response.data) {
-          setCompany(response.data);
-          setName(response.data.name || 'EPM Corporate HQ');
-          setSubscriptionPlan(response.data.subscriptionPlan || 'PRO');
-          setTrackingInterval(response.data.trackingInterval ?? 2);
+        const response = await apiClient.get('/tracking/config');
+        if (response.data && response.data.trackingIntervalMinutes) {
+          setTrackingInterval(response.data.trackingIntervalMinutes);
         }
-      } catch {
-        // Fallback default profile if server company endpoint is unmapped
-        setName('EPM Corporate HQ');
-        setSubscriptionPlan('Enterprise Plan');
-        setTrackingInterval(2);
+      } catch (err: any) {
+        console.error('Failed to fetch system tracking config:', err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchCompanyProfile();
+    fetchConfig();
   }, []);
 
   const handleSave = async (e: React.FormEvent) => {
@@ -55,15 +37,16 @@ const CompanySettings: React.FC = () => {
     setMessage(null);
 
     try {
-      await apiClient.patch('/company/profile', {
-        name,
-        subscriptionPlan,
-        trackingInterval: Number(trackingInterval),
+      await apiClient.post('/tracking/config', {
+        trackingIntervalMinutes: Number(trackingInterval),
       });
-      setMessage({ type: 'success', text: 'Company profile updated successfully!' });
-    } catch {
-      // Gracefully handle save success for UI settings
       setMessage({ type: 'success', text: 'Tracking frequency settings updated successfully!' });
+    } catch (err: any) {
+      console.error('Failed to update tracking config:', err);
+      setMessage({
+        type: 'error',
+        text: err.response?.data?.message || 'Failed to update tracking frequency settings.',
+      });
     } finally {
       setSaving(false);
     }
@@ -72,7 +55,7 @@ const CompanySettings: React.FC = () => {
   if (loading) {
     return (
       <div className="flex-center" style={{ minHeight: '60vh' }}>
-        <div className="text-secondary">Loading company settings...</div>
+        <div className="text-secondary">Loading system settings...</div>
       </div>
     );
   }
@@ -82,10 +65,10 @@ const CompanySettings: React.FC = () => {
       {/* Header */}
       <div style={{ marginBottom: '32px' }}>
         <h1 style={{ fontSize: '28px', fontWeight: '700', margin: '0 0 8px 0', color: '#fff' }}>
-          Company Settings
+          System Settings
         </h1>
         <p style={{ color: '#94a3b8', margin: 0 }}>
-          Manage your organization profile, subscription plan, and system preferences.
+          Manage global location tracking frequencies and device telemetry settings.
         </p>
       </div>
 

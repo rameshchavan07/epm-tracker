@@ -1,6 +1,7 @@
-import { Module } from '@nestjs/common';
+import { Module, Logger } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { UsersModule } from '../users/users.module';
@@ -15,11 +16,25 @@ import { EmployeesModule } from '../employees/employees.module';
     PassportModule,
     PrismaModule,
     EmployeesModule,
-    JwtModule.register({
-      secret:
-        process.env.JWT_SECRET ||
-        'ab84b5c7e1263d9154a65b7c89d234a9b6c43d8a5f2e10a7b8e5c1d4a6f2b3e8',
-      signOptions: { expiresIn: '24h' },
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => {
+        const secret = configService.get<string>('JWT_SECRET');
+        if (!secret) {
+          const logger = new Logger('AuthModule');
+          logger.error('JWT_SECRET environment variable is not set!');
+          throw new Error(
+            'JWT_SECRET must be defined in environment variables. Cannot start without it.',
+          );
+        }
+        return {
+          secret,
+          signOptions: {
+            expiresIn: (configService.get<string>('JWT_EXPIRATION') || '24h') as any,
+          },
+        };
+      },
     }),
   ],
   providers: [AuthService, JwtStrategy, FaceRecognitionService],
