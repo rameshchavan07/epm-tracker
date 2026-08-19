@@ -31,7 +31,6 @@
     "@nestjs/swagger": "^11.4.6",
     "@nestjs/throttler": "^6.5.0",
     "@nestjs/websockets": "^11.1.28",
-    "@tensorflow/tfjs-node": "^4.22.0",
     "bcrypt": "^6.0.0",
     "canvas": "^3.2.3",
     "class-transformer": "^0.5.1",
